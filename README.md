@@ -54,24 +54,11 @@
 
 ## 1. 초기 설정 (최초 1회 실행)
 
-사용자 이름 설정:
 ```bash
-git config --global user.name "YourName"
-```
-
-사용자 이메일 설정:
-```bash
-git config --global user.email "youremail@example.com"
-```
-
-비밀번호 최초 1번만 묻기로 설정:
-```
-git config --global credential.helper store
-```
-
-설정 확인:
-```bash
-git config --list
+git config --global user.name "NamJaeHyeon" # 사용자 이름 설정
+git config --global user.email "rexnamccx1229@gmail.com" # 사용자 이메일 설정
+git config --global credential.helper store # 비밀번호 최초 1번만 묻기로 설정
+git config --list # 설정 확인
 ```
 
 토큰 발급법:
