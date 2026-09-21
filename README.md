@@ -55,9 +55,9 @@ git config --global user.name "YourName"
 git config --global user.email "youremail@example.com"
 ```
 
-기본 브랜치명을 main으로 설정:
+기본 브랜치명을 temp(원래는 main)으로 설정:
 ```bash
-git config --global init.defaultBranch main
+git config --global init.defaultBranch temp
 ```
 
 설정 확인:
