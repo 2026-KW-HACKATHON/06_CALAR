@@ -118,10 +118,6 @@ git add .
 git commit -m "feat: 기능 추가, 여기는 아무거나 쳐도 됨. 걍 메모장"
 ```
 
----
-
-## 4. 원격 저장소 동기화 (Push / Pull)
-
 최초 푸시 (업스트림 설정):
 ```bash
 git push -u origin temp
@@ -144,27 +140,7 @@ git fetch
 
 ---
 
-## 5. 브랜치 작업
-
-브랜치 목록 확인:
-```bash
-git branch
-```
-
-새 브랜치 생성:
-```bash
-git branch feature-name
-```
-
-브랜치 전환:
-```bash
-git switch feature-name
-```
-
-새 브랜치 생성과 동시에 이동:
-```bash
-git switch -c feature-name
-```
+## 4. 브랜치 작업
 
 브랜치 병합 (main으로 이동 후 실행):
 ```bash
@@ -184,63 +160,4 @@ git branch -D feature-name
 
 ---
 
-## 6. 이력 조회 및 취소 / 되돌리기
-
-간단한 커밋 이력 한 줄로 보기:
-```bash
-git log --oneline --graph -n 10
-```
-
-방금 한 커밋 메시지 수정:
-```bash
-git commit --amend -m "새로운 커밋 메시지"
-```
-
-스테이징 취소 (add 취소):
-```bash
-git restore --staged 파일명.txt
-```
-
-작업 중인 파일의 수정을 마지막 커밋 상태로 되돌리기:
-```bash
-git restore 파일명.txt
-```
-
-특정 커밋 취소하고 새 커밋 생성 (안전한 되돌리기):
-```bash
-git revert 커밋해시
-```
-
-직전 커밋 취소 (수정한 파일은 그대로 보존):
-```bash
-git reset --soft HEAD~1
-```
-
-직전 커밋 및 모든 변경 사항 강제 삭제 (주의):
-```bash
-git reset --hard HEAD~1
-```
-
----
-
-## 7. 임시 보관 (Stash)
-
-작업 중인 내용 임시 보관:
-```bash
-git stash
-```
-
-임시 보관 목록 확인:
-```bash
-git stash list
-```
-
-가장 최근 보관 내용 꺼내서 적용하고 삭제:
-```bash
-git stash pop
-```
-
-보관 내용 적용만 하고 목록에는 유지:
-```bash
-git stash apply
-```
+## 기타 작업중인거 임시 저장 불러오기, 브랜치 다루기 등의 명령어도 있으나 사용 빈도가 높지 않아 필요시 검색 추천
