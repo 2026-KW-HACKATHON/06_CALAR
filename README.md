@@ -117,24 +117,14 @@ git status
 git diff
 ```
 
-모든 변경 파일 스테이징:
+모든 변경 파일 등록:
 ```bash
 git add .
 ```
 
-특정 파일만 스테이징:
+커밋(업로드 준비 작업) 생성:
 ```bash
-git add 파일명.txt
-```
-
-커밋 생성:
-```bash
-git commit -m "feat: 기능 추가"
-```
-
-스테이징과 커밋 동시 실행 (추적 중인 파일 대상):
-```bash
-git commit -am "fix: 버그 수정"
+git commit -m "feat: 기능 추가, 여기는 아무거나 쳐도 됨. 걍 메모장"
 ```
 
 ---
