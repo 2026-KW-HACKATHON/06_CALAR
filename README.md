@@ -55,6 +55,11 @@ git config --global user.name "YourName"
 git config --global user.email "youremail@example.com"
 ```
 
+비밀번호 최초 1번만 묻기로 설정:
+```
+git config --global credential.helper store
+```
+
 설정 확인:
 ```bash
 git config --list
