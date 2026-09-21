@@ -65,24 +65,38 @@ git config --global init.defaultBranch temp
 git config --list
 ```
 
+토큰 발급법:
+1. 우측 상단 프로필 사진 클릭
+2. Settings
+3. Developer Settings
+4. Personal access tokens
+5. Tokens (classic)
+6. 우측 상단 Generate new token
+7. Generate new token (classic)
+8. Expiration 설정
+9. Select scopes에서 repo 선
+10. 우측 아래 Generate Token 클릭
+11. "ghp_*" 복사(이 페이지를 벗어나면 다시 볼 수 없음)
+
 ---
 
 ## 2. 저장소 시작 & 연결
 
-현재 폴더에 Git 저장소 생성:
-```bash
-git init
-```
-
 원격 저장소 복제 (Clone):
 ```bash
-git clone https://github.com/username/repository.git
+git clone https://github.com/2026-KW-HACKATHON/06_CALAR.git
 ```
+이후 "ghp_*" 토큰 붙여넣기
+
+
 
 원격 저장소 연결:
 ```bash
-git remote add origin https://github.com/username/repository.git
+git remote add origin https://github.com/2026-KW-HACKATHON/06_CALAR.git
 ```
+<img width="1220" height="1089" alt="image" src="https://github.com/user-attachments/assets/71e1dd01-6afe-4974-895e-dff6b6eecc15" />
+
+
 
 연결된 원격 저장소 목록 확인:
 ```bash
