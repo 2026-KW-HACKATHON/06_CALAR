@@ -93,6 +93,7 @@ git clone https://github.com/2026-KW-HACKATHON/06_CALAR.git
 원격 저장소 연결:
 ```bash
 git remote add origin https://github.com/2026-KW-HACKATHON/06_CALAR.git
+cd 06_CALAR
 ```
 <img width="1220" height="1089" alt="image" src="https://github.com/user-attachments/assets/71e1dd01-6afe-4974-895e-dff6b6eecc15" />
 
