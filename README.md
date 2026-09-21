@@ -55,8 +55,8 @@
 ## 1. 초기 설정 (최초 1회 실행)
 
 ```bash
-git config --global user.name "NamJaeHyeon" # 사용자 이름 설정
-git config --global user.email "rexnamccx1229@gmail.com" # 사용자 이메일 설정
+git config --global user.name "Your Name" # 사용자 이름 설정
+git config --global user.email "your_email@example.com" # 사용자 이메일 설정
 git config --global credential.helper store # 비밀번호 최초 1번만 묻기로 설정
 git config --list # 설정 확인
 ```
@@ -70,7 +70,7 @@ git config --list # 설정 확인
 6. 우측 상단 Generate new token
 7. Generate new token (classic)
 8. Expiration 설정
-9. Select scopes에서 repo 선
+9. Select scopes에서 repo 선택
 10. 우측 아래 Generate Token 클릭
 11. "ghp_*" 복사(이 페이지를 벗어나면 다시 볼 수 없음)
 
@@ -84,15 +84,6 @@ git clone https://github.com/2026-KW-HACKATHON/06_CALAR.git
 cd 06_CALAR
 ```
 이후 "ghp_*" 토큰 붙여넣기
-
-
-
-원격 저장소 연결:
-```bash
-git remote add origin https://github.com/2026-KW-HACKATHON/06_CALAR.git
-```
-<img width="1220" height="1089" alt="image" src="https://github.com/user-attachments/assets/71e1dd01-6afe-4974-895e-dff6b6eecc15" />
-
 
 
 연결된 원격 저장소 목록 확인:
@@ -111,12 +102,13 @@ git switch -c temp
 
 모든 변경 파일 등록:
 ```bash
+#git status
 git add .
 ```
 
 커밋(업로드 준비 작업) 생성:
 ```bash
-git commit -m "feat: 기능 추가, 여기는 아무거나 쳐도 됨. 걍 메모장"
+git commit -m "feat: 로그인 기능 구현"
 ```
 
 최초 푸시 (업스트림 설정):
@@ -131,7 +123,7 @@ git push
 
 원격 저장소 최신 내용 내려받기 & 병합:
 ```bash
-git pull origin temp
+git pull origin main
 ```
 
 원격 저장소 최신 내역만 조회 (병합 X):
