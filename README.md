@@ -129,7 +129,7 @@ git commit -am "fix: 버그 수정"
 
 최초 푸시 (업스트림 설정):
 ```bash
-git push -u origin main
+git push -u origin temp
 ```
 
 이후 일반 푸시:
@@ -139,7 +139,7 @@ git push
 
 원격 저장소 최신 내용 내려받기 & 병합:
 ```bash
-git pull origin main
+git pull origin temp
 ```
 
 원격 저장소 최신 내역만 조회 (병합 X):
