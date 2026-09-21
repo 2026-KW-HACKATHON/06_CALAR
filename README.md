@@ -55,11 +55,6 @@ git config --global user.name "YourName"
 git config --global user.email "youremail@example.com"
 ```
 
-기본 브랜치명을 temp(원래는 main)으로 설정:
-```bash
-git config --global init.defaultBranch temp
-```
-
 설정 확인:
 ```bash
 git config --list
@@ -104,19 +99,14 @@ cd 06_CALAR
 git remote -v
 ```
 
+브랜치 temp(원래 루트는 main) 생성:
+```bash
+git switch -c temp
+```
+
 ---
 
 ## 3. 일상 작업 (상태 확인 / 추가 / 커밋)
-
-현재 변경 상태 확인:
-```bash
-git status
-```
-
-변경 내용 상세 확인:
-```bash
-git diff
-```
 
 모든 변경 파일 등록:
 ```bash
