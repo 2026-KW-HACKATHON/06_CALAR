@@ -38,3 +38,214 @@
   - (라이브러리명 - 라이선스 - 링크)
 
 > 개발 규칙에 따라 사용한 오픈소스의 라이선스와 출처를 명시합니다.
+
+# Git 핵심 명령어 치트시트 (Copy & Paste 전용)
+
+---
+
+## 1. 초기 설정 (최초 1회 실행)
+
+사용자 이름 설정:
+```bash
+git config --global user.name "YourName"
+```
+
+사용자 이메일 설정:
+```bash
+git config --global user.email "youremail@example.com"
+```
+
+기본 브랜치명을 main으로 설정:
+```bash
+git config --global init.defaultBranch main
+```
+
+설정 확인:
+```bash
+git config --list
+```
+
+---
+
+## 2. 저장소 시작 & 연결
+
+현재 폴더에 Git 저장소 생성:
+```bash
+git init
+```
+
+원격 저장소 복제 (Clone):
+```bash
+git clone https://github.com/username/repository.git
+```
+
+원격 저장소 연결:
+```bash
+git remote add origin https://github.com/username/repository.git
+```
+
+연결된 원격 저장소 목록 확인:
+```bash
+git remote -v
+```
+
+---
+
+## 3. 일상 작업 (상태 확인 / 추가 / 커밋)
+
+현재 변경 상태 확인:
+```bash
+git status
+```
+
+변경 내용 상세 확인:
+```bash
+git diff
+```
+
+모든 변경 파일 스테이징:
+```bash
+git add .
+```
+
+특정 파일만 스테이징:
+```bash
+git add 파일명.txt
+```
+
+커밋 생성:
+```bash
+git commit -m "feat: 기능 추가"
+```
+
+스테이징과 커밋 동시 실행 (추적 중인 파일 대상):
+```bash
+git commit -am "fix: 버그 수정"
+```
+
+---
+
+## 4. 원격 저장소 동기화 (Push / Pull)
+
+최초 푸시 (업스트림 설정):
+```bash
+git push -u origin main
+```
+
+이후 일반 푸시:
+```bash
+git push
+```
+
+원격 저장소 최신 내용 내려받기 & 병합:
+```bash
+git pull origin main
+```
+
+원격 저장소 최신 내역만 조회 (병합 X):
+```bash
+git fetch
+```
+
+---
+
+## 5. 브랜치 작업
+
+브랜치 목록 확인:
+```bash
+git branch
+```
+
+새 브랜치 생성:
+```bash
+git branch feature-name
+```
+
+브랜치 전환:
+```bash
+git switch feature-name
+```
+
+새 브랜치 생성과 동시에 이동:
+```bash
+git switch -c feature-name
+```
+
+브랜치 병합 (main으로 이동 후 실행):
+```bash
+git switch main
+git merge feature-name
+```
+
+브랜치 삭제 (병합 완료된 브랜치):
+```bash
+git branch -d feature-name
+```
+
+브랜치 강제 삭제:
+```bash
+git branch -D feature-name
+```
+
+---
+
+## 6. 이력 조회 및 취소 / 되돌리기
+
+간단한 커밋 이력 한 줄로 보기:
+```bash
+git log --oneline --graph -n 10
+```
+
+방금 한 커밋 메시지 수정:
+```bash
+git commit --amend -m "새로운 커밋 메시지"
+```
+
+스테이징 취소 (add 취소):
+```bash
+git restore --staged 파일명.txt
+```
+
+작업 중인 파일의 수정을 마지막 커밋 상태로 되돌리기:
+```bash
+git restore 파일명.txt
+```
+
+특정 커밋 취소하고 새 커밋 생성 (안전한 되돌리기):
+```bash
+git revert 커밋해시
+```
+
+직전 커밋 취소 (수정한 파일은 그대로 보존):
+```bash
+git reset --soft HEAD~1
+```
+
+직전 커밋 및 모든 변경 사항 강제 삭제 (주의):
+```bash
+git reset --hard HEAD~1
+```
+
+---
+
+## 7. 임시 보관 (Stash)
+
+작업 중인 내용 임시 보관:
+```bash
+git stash
+```
+
+임시 보관 목록 확인:
+```bash
+git stash list
+```
+
+가장 최근 보관 내용 꺼내서 적용하고 삭제:
+```bash
+git stash pop
+```
+
+보관 내용 적용만 하고 목록에는 유지:
+```bash
+git stash apply
+```
