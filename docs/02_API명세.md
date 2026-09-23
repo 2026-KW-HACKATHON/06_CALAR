@@ -17,10 +17,10 @@ p는 purpose의 약어이다.
 ```
 200 {
 foods: [{
-  food_name,
-  food_img,
-  food_cost,
-  food_rate
+  food_name: "두쫀쿠",
+  food_img: "data:image/...",
+  food_cost: 4000,
+  food_rate: 4.5
 }, ...]}
 ```   
 ```
