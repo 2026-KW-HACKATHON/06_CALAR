@@ -10,6 +10,6 @@ app.get('/',(req,res) => {
 });
 
 app.listen(PORT,() => {
-    console.log(`서버 실행됨: https://localhost:${PORT}`);
+    console.log(`서버 실행됨: http://localhost:${PORT}`);
 });
 
