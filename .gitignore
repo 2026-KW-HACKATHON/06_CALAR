@@ -35,3 +35,6 @@ a.out
 *.log
 tmp/
 temp/
+
+# ---- OCR (tesseract.js 언어 데이터, 첫 실행 시 자동 다운로드) ----
+*.traineddata

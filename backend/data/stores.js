@@ -78,6 +78,25 @@ const stores = [
     visits: 8,
     createdAt: '2026-09-25',
   },
+  {
+    id: 5,
+    name: '신규 오픈 카페',
+    category: '카페',
+    description: '9월에 새로 문을 연 골목 카페',
+    phone: '02-000-0005',
+    address: '서울 노원구 월계1동 (가상 주소 5)',
+    location: { lat: 37.6199, lng: 127.0579 },
+    openHours: '09:00-22:00',
+    orderType: 'none',
+    signKeywords: ['신규', '오픈', '카페'],
+    menu: [
+      { id: 501, name: '아메리카노', price: 3000 },
+      { id: 502, name: '카페라떼', price: 3500 },
+    ],
+    coupon: { title: '오픈 기념 음료 20% 할인', discountRate: 20 },
+    visits: 3,
+    createdAt: '2026-09-25',
+  },
 ];
 
 module.exports = stores;

@@ -1,46 +1,47 @@
 const express = require('express');
-const storeService = require('./services/storeService');
+const cors = require('cors');
+const multer = require('multer');
+const storesRouter = require('./routes/stores');
+const ordersRouter = require('./routes/orders');
 
 const app = express();
 
 //port number
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+app.use(cors()); // 프론트(다른 포트)에서 호출 허용
+app.use(express.json()); // JSON body -> req.body
 
 app.get('/',(req,res) => {
     res.send('06_CALAR 백엔드 서버 동작 중.');
 });
 
-// 가게 목록 조회
-app.get('/api/stores', (req, res) => {
-    const { category, keyword } = req.query;
-    let lat;
-    let lng;
+app.use('/api/stores', storesRouter);
+app.use('/api/orders', ordersRouter);
 
-    for (const key of ['lat', 'lng']) {
-        const raw = req.query[key];
-        if (raw === undefined) continue;
-        const value = Number(raw);
-        if (raw === '' || Number.isNaN(value)) {
-            return res.status(400).json({ error: `Invalid query parameter: ${key}` });
-        }
-        if (key === 'lat') lat = value;
-        else lng = value;
-    }
-
-    res.json(storeService.getAllStores({ category, keyword, lat, lng }));
+// 없는 주소
+app.use((req, res) => {
+    res.status(404).json({ error: 'Not found' });
 });
 
-// 가게 상세 조회
-app.get('/api/stores/:id', (req, res) => {
-    const store = storeService.getStoreById(req.params.id);
-
-    if (!store) {
-        return res.status(404).json({ error: 'Store not found' });
+// 에러 핸들러: 모든 에러를 { error: "메시지" } 형태로 응답
+app.use((err, req, res, next) => {
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({ error: 'Invalid JSON body' });
     }
-    res.json(store);
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ error: 'File too large' });
+        }
+        return res.status(400).json({ error: `Image must be sent in 'image' field` });
+    }
+    if (err.status) {
+        return res.status(err.status).json({ error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT,() => {
     console.log(`서버 실행됨: http://localhost:${PORT}`);
 });
-
