@@ -1,7 +1,8 @@
 const orders = require('../data/orders');
-const { findStore } = require('./storeService');
+const { findStore, isOpenAt } = require('./storeService');
 const HttpError = require('../utils/httpError');
-const { nowKSTString } = require('../utils/time');
+const { DAY_MS, nowKSTString, parseLocalDateTime } = require('../utils/time');
+const { isPlainObject } = require('../utils/validate');
 
 const ORDER_STATUSES = ['pending', 'accepted', 'rejected', 'done'];
 
@@ -13,15 +14,70 @@ const ALLOWED_TRANSITIONS = {
   done: [],
 };
 
-const PICKUP_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/; // YYYY-MM-DDTHH:mm
-const PHONE_PATTERN = /^[0-9-]{9,13}$/;
+const MAX_QUANTITY = 99; // 메뉴 하나당 최대 수량
+const MAX_PICKUP_DAYS = 30; // 픽업/예약은 최대 30일 뒤까지
+
+// 휴대폰(010-1234-5678), 서울(02-123-4567), 지역번호(031-123-4567), 하이픈 없는 형식 허용
+const PHONE_PATTERN = /^0\d{1,2}-?\d{3,4}-?\d{4}$/;
 
 let nextId = Math.max(0, ...orders.map((o) => o.id)) + 1;
 
+// items 검사 + 같은 메뉴는 하나로 합침 → { orderItems, totalPrice }
+function buildOrderItems(store, items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new HttpError(400, 'items must be a non-empty array');
+  }
+
+  const quantities = new Map(); // menuId -> 합친 수량 (넣은 순서 유지)
+  for (const item of items) {
+    if (!isPlainObject(item)) {
+      throw new HttpError(400, 'Each item must be an object with menuId and quantity');
+    }
+    const menu = store.menu.find((m) => m.id === item.menuId);
+    if (!menu) {
+      throw new HttpError(400, `Invalid menuId: ${item.menuId}`);
+    }
+    if (!Number.isInteger(item.quantity) || item.quantity < 1) {
+      throw new HttpError(400, `Invalid quantity for menuId: ${item.menuId}`);
+    }
+    quantities.set(menu.id, (quantities.get(menu.id) ?? 0) + item.quantity);
+  }
+
+  let totalPrice = 0;
+  const orderItems = [];
+  for (const [menuId, quantity] of quantities) {
+    if (quantity > MAX_QUANTITY) {
+      throw new HttpError(400, `Quantity for menuId: ${menuId} exceeds ${MAX_QUANTITY}`);
+    }
+    totalPrice += store.menu.find((m) => m.id === menuId).price * quantity;
+    orderItems.push({ menuId, quantity });
+  }
+  return { orderItems, totalPrice };
+}
+
+// pickupTime 검사: 형식·실제 날짜 → 과거 아님 → 30일 이내 → 가게 영업시간 안
+function validatePickupTime(store, pickupTime) {
+  const parsed = parseLocalDateTime(pickupTime);
+  if (!parsed) {
+    throw new HttpError(400, 'Invalid pickupTime format (YYYY-MM-DDTHH:mm)');
+  }
+
+  const now = Date.now();
+  if (parsed.epochMs + 60 * 1000 <= now) {
+    throw new HttpError(400, 'pickupTime must not be in the past'); // 지금 이 분(minute)까지는 허용
+  }
+  if (parsed.epochMs > now + MAX_PICKUP_DAYS * DAY_MS) {
+    throw new HttpError(400, `pickupTime must be within ${MAX_PICKUP_DAYS} days`);
+  }
+  if (!isOpenAt(store.openHours, parsed.minutesOfDay)) {
+    throw new HttpError(400, 'pickupTime is outside business hours');
+  }
+}
+
 // 주문 생성 (검증 실패 시 HttpError를 던진다)
 function createOrder(body) {
-  if (!body || typeof body !== 'object') {
-    throw new HttpError(400, 'Request body is required');
+  if (!isPlainObject(body)) {
+    throw new HttpError(400, 'Request body must be a JSON object');
   }
 
   const { storeId, items, pickupTime, customerPhone } = body;
@@ -32,7 +88,7 @@ function createOrder(body) {
     }
   }
 
-  if (!Number.isInteger(storeId)) {
+  if (!Number.isSafeInteger(storeId) || storeId < 1) {
     throw new HttpError(400, 'Invalid storeId');
   }
 
@@ -44,27 +100,10 @@ function createOrder(body) {
     throw new HttpError(400, 'This store does not accept orders');
   }
 
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new HttpError(400, 'items must be a non-empty array');
-  }
-
   // totalPrice는 프론트 값이 아니라 가게 메뉴 가격으로 서버가 직접 계산
-  let totalPrice = 0;
-  const orderItems = items.map((item) => {
-    const menu = store.menu.find((m) => m.id === item?.menuId);
-    if (!menu) {
-      throw new HttpError(400, `Invalid menuId: ${item?.menuId}`);
-    }
-    if (!Number.isInteger(item.quantity) || item.quantity < 1) {
-      throw new HttpError(400, `Invalid quantity for menuId: ${item.menuId}`);
-    }
-    totalPrice += menu.price * item.quantity;
-    return { menuId: item.menuId, quantity: item.quantity };
-  });
+  const { orderItems, totalPrice } = buildOrderItems(store, items);
+  validatePickupTime(store, pickupTime);
 
-  if (typeof pickupTime !== 'string' || !PICKUP_TIME_PATTERN.test(pickupTime)) {
-    throw new HttpError(400, 'Invalid pickupTime format (YYYY-MM-DDTHH:mm)');
-  }
   if (typeof customerPhone !== 'string' || !PHONE_PATTERN.test(customerPhone)) {
     throw new HttpError(400, 'Invalid customerPhone format');
   }
@@ -83,13 +122,12 @@ function createOrder(body) {
   return order;
 }
 
-// id로 주문 하나 찾기 (없으면 null)
+// id로 주문 하나 찾기 (없으면 null). id는 이미 검사된 정수
 function getOrderById(id) {
-  const orderId = Number(id);
-  return orders.find((o) => o.id === orderId) ?? null;
+  return orders.find((o) => o.id === id) ?? null;
 }
 
-// 가게로 들어온 주문 목록 (status 필터, 픽업 시간 빠른 순)
+// 가게로 들어온 주문 목록 (status 필터, 픽업 시간 빠른 순 → 같으면 먼저 들어온 순)
 function getOrdersByStore(storeId, status) {
   if (!findStore(storeId)) {
     throw new HttpError(404, 'Store not found');
@@ -99,18 +137,19 @@ function getOrdersByStore(storeId, status) {
   }
 
   return orders
-    .filter((o) => o.storeId === Number(storeId))
+    .filter((o) => o.storeId === storeId)
     .filter((o) => status === undefined || o.status === status)
-    .sort((a, b) => a.pickupTime.localeCompare(b.pickupTime));
+    .sort((a, b) => a.pickupTime.localeCompare(b.pickupTime) || a.id - b.id);
 }
 
 // 주문 상태 변경 (수락/거절/완료)
-function updateOrderStatus(id, status) {
+function updateOrderStatus(id, body) {
   const order = getOrderById(id);
   if (!order) {
     throw new HttpError(404, 'Order not found');
   }
 
+  const status = isPlainObject(body) ? body.status : undefined;
   if (status === undefined || status === null || status === '') {
     throw new HttpError(400, 'status is required');
   }

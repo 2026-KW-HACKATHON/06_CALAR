@@ -5,16 +5,21 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test \"test/**/*.test.js\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/kor": "^1.0.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "multer": "^2.4.0",
     "tesseract.js": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

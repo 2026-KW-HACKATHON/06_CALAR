@@ -1,5 +1,11 @@
 // 월계1동 가게 샘플 데이터 (가상의 가게, 테스트용)
 // openStatus는 저장하지 않고 openHours 기준으로 서비스에서 계산해서 내려준다.
+//
+// signKeywords 작성 규칙 (간판 인식 매칭용, storeService.matchStoresByText 참고)
+// - 간판에 실제로 쓰인 단어를 넣는다.
+// - 가게 이름 전체가 보이거나, 키워드가 2개 이상 보여야 "이 가게"로 인정된다.
+// - 그래서 '월계'(동네 이름), '카페'(업종)처럼 흔한 단어는 최대 1개만 넣는다.
+//   흔한 단어 2개가 같이 들어가면 다른 가게 간판에도 매칭된다.
 const stores = [
   {
     id: 1,
@@ -50,7 +56,7 @@ const stores = [
     location: { lat: 37.6192, lng: 127.0615 },
     openHours: '10:00-19:00',
     orderType: 'reservation',
-    signKeywords: ['햇살', '미용실', '헤어'],
+    signKeywords: ['햇살', '미용실'],
     menu: [
       { id: 301, name: '커트', price: 12000 },
       { id: 302, name: '뿌리 염색', price: 30000 },
@@ -80,15 +86,15 @@ const stores = [
   },
   {
     id: 5,
-    name: '신규 오픈 카페',
+    name: '모퉁이 카페',
     category: '카페',
-    description: '9월에 새로 문을 연 골목 카페',
+    description: '9월에 새로 문을 연 골목 모퉁이 카페',
     phone: '02-000-0005',
     address: '서울 노원구 월계1동 (가상 주소 5)',
     location: { lat: 37.6199, lng: 127.0579 },
     openHours: '09:00-22:00',
     orderType: 'none',
-    signKeywords: ['신규', '오픈', '카페'],
+    signKeywords: ['모퉁이', '카페'],
     menu: [
       { id: 501, name: '아메리카노', price: 3000 },
       { id: 502, name: '카페라떼', price: 3500 },
