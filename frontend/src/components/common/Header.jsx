@@ -1,9 +1,14 @@
-// TODO: 공통 헤더 컴포넌트 (뒤로가기, 타이틀)
-// TODO: props - title, showBackButton, onBackClick
+import { useNavigate } from 'react-router-dom';
 
-const Header = () => {
-  // TODO: 구현
-  return null;
+const Header = ({ title, showBackButton = false }) => {
+  const navigate = useNavigate();
+
+  return (
+    <header>
+      {showBackButton && <button onClick={() => navigate(-1)}>뒤로</button>}
+      <h1>{title}</h1>
+    </header>
+  );
 };
 
 export default Header;

@@ -1,10 +1,34 @@
-// TODO: [고객/시나리오 3] 오늘의 동네 추천 목록 화면
-// TODO: RecommendationCard 리스트, 신규/저활성 가게 포함
-// TODO: storeService.js로 추천 목록 fetch
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Header from '../../components/common/Header';
+import RecommendationCard from '../../components/recommendation/RecommendationCard';
+import { getRecommendedStores } from '../../services/storeService';
+import { ROUTES } from '../../constants/routes';
+import useGeolocation from '../../hooks/useGeolocation';
 
 const Recommendation = () => {
-  // TODO: 구현
-  return null;
+  const navigate = useNavigate();
+  const { latitude, longitude } = useGeolocation();
+  const [stores, setStores] = useState([]);
+
+  useEffect(() => {
+    getRecommendedStores({ lat: latitude, lng: longitude }).then(setStores);
+  }, [latitude, longitude]);
+
+  return (
+    <div>
+      <Header title="오늘의 동네 추천" showBackButton />
+
+      {stores.map((store) => (
+        <RecommendationCard
+          key={store.id}
+          store={store}
+          userLocation={{ latitude, longitude }}
+          onClick={(id) => navigate(ROUTES.storeDetail(id))}
+        />
+      ))}
+    </div>
+  );
 };
 
 export default Recommendation;

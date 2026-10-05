@@ -1,9 +1,7 @@
-// TODO: 추천 이유 표시 컴포넌트 (예: "새로 오픈했어요")
-// TODO: props - reasonType, reasonText
-
-const RecommendationReason = () => {
-  // TODO: 구현
-  return null;
+// 백엔드가 내려주는 reason 필드(예: "새로 오픈했어요")를 그대로 표시합니다.
+const RecommendationReason = ({ reason }) => {
+  if (!reason) return null;
+  return <p>{reason}</p>;
 };
 
 export default RecommendationReason;

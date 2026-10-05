@@ -1,19 +1,30 @@
-// TODO: 라우터 설정 (react-router-dom)
-// TODO: 고객용 라우트
-//   - "/"                         -> pages/customer/Home
-//   - "/camera"                   -> pages/customer/Camera
-//   - "/store/:storeId"           -> pages/customer/StoreDetail
-//   - "/order"                    -> pages/customer/Order
-//   - "/recommendation"           -> pages/customer/Recommendation
-// TODO: 점주용 라우트 (간단히 경로만 분리, 로그인/인증은 해커톤 범위에 따라 생략 가능)
-//   - "/owner"                    -> pages/owner/OwnerHome
-//   - "/owner/order/:orderId"     -> pages/owner/OwnerOrderManage
-// TODO: 공통 Header 등 레이아웃 적용
-// TODO: styles/global.css import
+import { Routes, Route } from 'react-router-dom';
+import { ROUTES } from './constants/routes';
+
+import Home from './pages/customer/Home';
+import Camera from './pages/customer/Camera';
+import StoreDetail from './pages/customer/StoreDetail';
+import Order from './pages/customer/Order';
+import Recommendation from './pages/customer/Recommendation';
+
+import OwnerHome from './pages/owner/OwnerHome';
+import OwnerOrderManage from './pages/owner/OwnerOrderManage';
 
 const App = () => {
-  // TODO: 구현
-  return null;
+  return (
+    <Routes>
+      {/* 고객용 */}
+      <Route path={ROUTES.home} element={<Home />} />
+      <Route path={ROUTES.camera} element={<Camera />} />
+      <Route path={ROUTES.storeDetailPath} element={<StoreDetail />} />
+      <Route path={ROUTES.orderPath} element={<Order />} />
+      <Route path={ROUTES.recommendation} element={<Recommendation />} />
+
+      {/* 점주용 */}
+      <Route path={ROUTES.ownerHomePath} element={<OwnerHome />} />
+      <Route path={ROUTES.ownerOrderManagePath} element={<OwnerOrderManage />} />
+    </Routes>
+  );
 };
 
 export default App;

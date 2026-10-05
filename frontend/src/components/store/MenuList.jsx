@@ -1,9 +1,16 @@
-// TODO: 가게 메뉴 목록 컴포넌트
-// TODO: props - menuItems
+const MenuList = ({ menu = [] }) => {
+  if (menu.length === 0) return null;
 
-const MenuList = () => {
-  // TODO: 구현
-  return null;
+  return (
+    <ul>
+      {menu.map((item) => (
+        <li key={item.id}>
+          <span>{item.name}</span>
+          <span>{item.price.toLocaleString()}원</span>
+        </li>
+      ))}
+    </ul>
+  );
 };
 
 export default MenuList;

@@ -1,10 +1,35 @@
-// TODO: [고객/시나리오 2] 미리 주문/예약 신청 및 상태 확인 화면
-// TODO: OrderForm으로 신청, OrderStatus로 상태 조회
-// TODO: orderService.js 연동
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import Header from '../../components/common/Header';
+import OrderForm from '../../components/order/OrderForm';
+import OrderStatus from '../../components/order/OrderStatus';
+import { getStoreDetail } from '../../services/storeService';
 
 const Order = () => {
-  // TODO: 구현
-  return null;
+  const { storeId } = useParams();
+  const [store, setStore] = useState(null);
+  const [submittedOrder, setSubmittedOrder] = useState(null);
+
+  useEffect(() => {
+    getStoreDetail(Number(storeId)).then(setStore);
+  }, [storeId]);
+
+  if (!store) return <p>불러오는 중...</p>;
+
+  return (
+    <div>
+      <Header title={`${store.name} 주문/예약`} showBackButton />
+
+      {submittedOrder ? (
+        <>
+          <p>신청이 접수됐어요!</p>
+          <OrderStatus order={submittedOrder} />
+        </>
+      ) : (
+        <OrderForm storeId={store.id} menu={store.menu} onSuccess={setSubmittedOrder} />
+      )}
+    </div>
+  );
 };
 
 export default Order;
