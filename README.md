@@ -35,7 +35,12 @@
 
 - 본 프로젝트 라이선스: (추후 결정, 예: MIT)
 - 사용한 오픈소스 및 출처:
-  - (라이브러리명 - 라이선스 - 링크)
+  - [백엔드] express - MIT - https://github.com/expressjs/express
+  - [백엔드] cors - MIT - https://github.com/expressjs/cors
+  - [백엔드] multer - MIT - https://github.com/expressjs/multer
+  - [백엔드] tesseract.js - Apache-2.0 - https://github.com/naptha/tesseract.js
+  - [백엔드] @tesseract.js-data/kor, @tesseract.js-data/eng - MIT - https://github.com/naptha/tessdata
+  - [백엔드 테스트 이미지] Noto Sans KR 폰트로 제작 - OFL - https://fonts.google.com/noto/specimen/Noto+Sans+KR
 
 > 개발 규칙에 따라 사용한 오픈소스의 라이선스와 출처를 명시합니다.
 
