@@ -1,6 +1,70 @@
-/* TODO: 색상/폰트 크기 CSS 변수 정의 */
-
+/* 월계 디자인 토큰 — src/styles/variables.css 에 그대로 복사 */
 :root {
-  /* TODO: --color-primary, --color-text, --color-background 등 */
-  /* TODO: --font-size-base, --font-size-large 등 */
+  /* 색상 · 기본 */
+  --color-bg: #FBF7F0;            /* 앱 배경 (따뜻한 미색) */
+  --color-surface: #FFFFFF;       /* 카드, 헤더 */
+  --color-text: #1F1A14;          /* 본문 — 배경 대비 16.8:1 */
+  --color-text-sub: #5A5046;      /* 보조 텍스트 — 7.4:1 */
+  --color-border: #E4DACB;        /* 카드 구분선 (장식용) */
+  --color-border-strong: #8A7E70; /* 입력창 테두리 — 3.8:1 (UI 3:1 기준) */
+
+  /* 색상 · 포인트 */
+  --color-primary: #B4400F;          /* 감빛 주황 — 흰 글자 5.7:1 */
+  --color-primary-pressed: #8F300A;
+  --color-primary-soft: #FCE9DD;     /* 보조 버튼 눌림, 강조 배경 */
+  --color-call: #1F6B45;             /* 전화 걸기 — 흰 글자 6.5:1 */
+  --color-call-pressed: #154F32;
+  --color-focus: #1A4E9A;            /* 키보드 포커스 링 */
+  --color-disabled-bg: #E6E0D6;
+  --color-disabled-text: #6B6155;    /* 4.6:1 */
+  --color-error: #A1261B;
+
+  /* 뱃지 · 영업 상태 */
+  --badge-open-bg: #E3F2E8;    --badge-open-text: #155C36;    /* 7.0:1 */
+  --badge-closed-bg: #ECE8E2;  --badge-closed-text: #4A4238;  /* 8.0:1 */
+
+  /* 뱃지 · 주문 상태 */
+  --status-pending-bg: #FFF1C7;  --status-pending-text: #7A4B00;  /* 대기중 6.6:1 */
+  --status-accepted-bg: #E2ECFA; --status-accepted-text: #1A4E9A; /* 수락됨 6.8:1 */
+  --status-rejected-bg: #FBE4E1; --status-rejected-text: #A1261B; /* 거절됨 6.2:1 */
+  --status-done-bg: #3A332B;     --status-done-text: #FFFFFF;     /* 완료 12.4:1 */
+
+  /* 타이포그래피 (html 기본 18px) */
+  --font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --font-size-caption: 16px;   /* 최소 크기 — 이보다 작게 쓰지 않음 */
+  --font-size-body: 18px;
+  --font-size-body-lg: 20px;
+  --font-size-button: 22px;
+  --font-size-title-sm: 22px;  /* 카드 제목 (가게 이름) */
+  --font-size-title: 26px;     /* 섹션 제목 */
+  --font-size-title-lg: 30px;  /* 화면 제목 */
+  --line-height-body: 1.6;
+  --line-height-title: 1.3;
+  --font-weight-regular: 500;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+
+  /* 간격 (4px 단위) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;   /* 화면 좌우 여백 */
+  --space-6: 24px;   /* 섹션 사이 */
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* 터치 영역 */
+  --touch-min: 48px;        /* 모든 탭 가능한 요소 최소 */
+  --touch-button: 64px;     /* BigButton 높이 */
+  --touch-input: 60px;
+
+  /* 모양 */
+  --radius-sm: 10px;   /* 뱃지 */
+  --radius-md: 14px;   /* 입력창, 탭 */
+  --radius-lg: 18px;   /* 카드, BigButton */
+  --radius-pill: 999px;
+  --border-width: 2px;
+  --shadow-card: 0 1px 0 rgba(31, 26, 20, 0.04), 0 2px 8px rgba(31, 26, 20, 0.06);
+  --focus-ring: 0 0 0 3px #FFFFFF, 0 0 0 6px var(--color-focus);
 }

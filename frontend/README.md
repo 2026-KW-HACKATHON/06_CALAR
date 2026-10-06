@@ -74,6 +74,30 @@ npm run dev
 
 > ⚠️ 지금 만든 컴포넌트/페이지들은 **기능 연결(와이어링)까지만** 되어 있고, 디자인(글씨 크기, 색상, 레이아웃)은 전혀 입혀지지 않은 상태입니다. `styles/global.css`, `styles/variables.css`에 고령층 배려 스타일을 입히는 작업이 다음 단계로 남아있습니다.
 
+## 디자인 적용 내역
+
+Claude Design 시안(`월계 모바일 앱 디자인`)을 코드에 반영했습니다. 폴더 구조는 그대로이고, 기존 폴더 안에 파일만 추가했습니다.
+
+- `styles/variables.css` = 시안 토큰 그대로, `styles/global.css` = 시안의 버튼/카드/뱃지/입력창/탭 스타일을 클래스로 정리
+- `index.html`에 글꼴 추가 (Pretendard, Material Symbols Rounded) — 인터넷 연결이 필요합니다
+- 새 공통 컴포넌트: `Icon`, `Spinner`, `StateBox`(로딩/오류/결과 없음), `Toast`, `OpenBadge`, `StoreCard`, `OrderStatusBadge`
+- 새 훅/유틸/상수: `hooks/useFetch.js`, `utils/formatDate.js`, `utils/pickupTime.js`, `constants/orderStatus.js`
+- BigButton(`variant`/`loading`/`icon`), CallButton(`<a href="tel:">` 하나), Header(뒤로 아이콘) 개선
+- Home: 로딩/오류/결과 없음, 가게 카드(업종·영업 뱃지·거리), 가까운 순 정렬
+- StoreDetail: 쿠폰을 가게 정보 바로 아래로, 주문 버튼 화면 아래 고정, 영업종료 안내
+- Order: 수량 빼기/더하기, 시간 고르기 버튼 4개, 전화번호 자동 하이픈, 칸별 오류, 접수 화면(메뉴·금액·전화·처음 화면으로), 상태별 안내
+- Camera: 탭 선택 표시·아이콘, 촬영 요령, 사진 미리보기, 인식 실패 시 "직접 검색으로 전환", 다시 찍기, 검색 결과 없음
+- 점주: 한국어 상태 뱃지, 신청 시각, 전화 버튼, 거절 전 확인, 처리 후 안내, 요청 건수
+
+시안에 없지만 추가한 것
+- 시간 버튼이 가게 영업시간 밖이면 비활성 + "다른 시간 직접 고르기" (서버가 영업시간 밖 주문을 거절하기 때문)
+- 서버 오류 메시지를 한국어로 변환
+- 접수 화면 10초마다, 점주 목록 15초마다 상태 자동 갱신
+- 예시 사진 자리: `public/images/sign-example.jpg`를 넣으면 자동으로 표시됨
+- 오늘의 동네 추천 화면은 시안이 없어 Home 카드를 재사용
+
+남은 것: QR 스캐너 라이브러리 연동, 추천 `reason` 필드(백엔드), 촬영 예시 사진 파일
+
 > `package.json`은 React + Vite 기준이며, `react-router-dom`, `axios`가 추가되어 있습니다.
 
 ---

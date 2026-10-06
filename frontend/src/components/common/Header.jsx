@@ -1,12 +1,27 @@
 import { useNavigate } from 'react-router-dom';
+import Icon from './Icon';
 
-const Header = ({ title, showBackButton = false }) => {
+// 공통 헤더
+// props
+//  - title          : 화면 제목
+//  - showBackButton : true 면 왼쪽에 "뒤로" 버튼 (아이콘 + 글자)
+//  - variant        : 'brand' 면 Home 처럼 큰 주황색 로고 제목
+const Header = ({ title, showBackButton = false, variant = 'default' }) => {
   const navigate = useNavigate();
 
+  const classes = ['header', showBackButton ? 'header--back' : '', variant === 'brand' ? 'header--brand' : '']
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <header>
-      {showBackButton && <button onClick={() => navigate(-1)}>뒤로</button>}
-      <h1>{title}</h1>
+    <header className={classes}>
+      {showBackButton && (
+        <button type="button" className="header__back" onClick={() => navigate(-1)}>
+          <Icon name="chevron_left" />
+          뒤로
+        </button>
+      )}
+      <h1 className="header__title">{title}</h1>
     </header>
   );
 };
