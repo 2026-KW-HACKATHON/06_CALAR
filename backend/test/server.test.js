@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const os = require('node:os');
 const net = require('net');
 const { spawn } = require('child_process');
 const { once } = require('events');
@@ -36,7 +37,16 @@ function waitForOutput(proc, pattern, timeoutMs = 20000) {
 
 test('npm start: 서버가 뜨고 OCR이 미리 준비된다', async () => {
   const port = await freePort();
-  const proc = spawn(process.execPath, [INDEX], { env: { ...process.env, PORT: String(port) } });
+  const proc = spawn(process.execPath, [INDEX], {
+    env: {
+      ...process.env,
+      PORT: String(port),
+      HOST: '127.0.0.1',
+      CALAR_DB_PATH: path.join(os.tmpdir(), `06-calar-server-test-${process.pid}.sqlite`),
+      CALAR_ADMIN_EMAIL: 'test-admin@calar.local',
+      CALAR_ADMIN_PASSWORD: 'test-admin-password-2026',
+    },
+  });
   try {
     await waitForOutput(proc, /간판 인식\(OCR\) 준비 완료/);
     const res = await fetch(`http://127.0.0.1:${port}/api/stores/1`);
@@ -48,11 +58,20 @@ test('npm start: 서버가 뜨고 OCR이 미리 준비된다', async () => {
 });
 
 test('포트가 이미 사용 중이면 안내 메시지를 내고 종료 코드 1', async () => {
-  const blocker = net.createServer().listen(0);
+  const blocker = net.createServer().listen(0, '127.0.0.1');
   await once(blocker, 'listening');
   const { port } = blocker.address();
   try {
-    const proc = spawn(process.execPath, [INDEX], { env: { ...process.env, PORT: String(port) } });
+    const proc = spawn(process.execPath, [INDEX], {
+      env: {
+        ...process.env,
+        PORT: String(port),
+      HOST: '127.0.0.1',
+        CALAR_DB_PATH: path.join(os.tmpdir(), `06-calar-server-test-${process.pid}.sqlite`),
+        CALAR_ADMIN_EMAIL: 'test-admin@calar.local',
+        CALAR_ADMIN_PASSWORD: 'test-admin-password-2026',
+      },
+    });
     const output = waitForOutput(proc, /이미 사용 중/);
     const [code] = await once(proc, 'exit');
     assert.match(await output, new RegExp(`포트 ${port}번이 이미 사용 중`));

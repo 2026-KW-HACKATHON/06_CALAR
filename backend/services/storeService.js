@@ -1,4 +1,4 @@
-const stores = require('../data/stores');
+const db = require('../db');
 const { nowMinutesKST, toMinutes, daysSince } = require('../utils/time');
 const { distanceKm } = require('../utils/geo');
 
@@ -44,6 +44,47 @@ function withOpenStatus(store) {
   return { ...store, openStatus: isOpenAt(store.openHours, nowMinutesKST()) ? 'open' : 'closed' };
 }
 
+function mapStore(row) {
+  const rating = db.prepare(`SELECT AVG(r.score) AS average, COUNT(*) AS count FROM order_ratings r
+    JOIN orders o ON o.order_id = r.order_id WHERE o.store_id = ? AND o.status = 'done'`).get(row.id);
+  const signKeywords = db.prepare('SELECT name FROM signKeyWords WHERE store_id = ? AND deleted_at IS NULL ORDER BY id').all(row.id);
+  const menu = db.prepare('SELECT menu_id AS id, uuid, name, price FROM menus WHERE store_id = ? AND deleted_at IS NULL ORDER BY menu_id').all(row.id);
+  const coupon = db.prepare('SELECT uuid, title, discount_rate AS discountRate FROM coupons WHERE store_id = ? AND deleted_at IS NULL AND is_active = 1 ORDER BY coupon_id LIMIT 1').get(row.id);
+  return {
+    id: row.id,
+    rating: rating.average === null ? null : Math.round(rating.average * 10) / 10,
+    ratingCount: rating.count,
+    uuid: row.uuid,
+    name: row.name,
+    category: row.category,
+    description: row.description,
+    phone: row.phone,
+    address: row.address,
+    location: { lat: row.location_lat, lng: row.location_lng },
+    openHours: row.open_hours,
+    orderType: row.order_type,
+    signKeywords: signKeywords.map((keyword) => keyword.name),
+    menu,
+    coupon: coupon ?? null,
+    visits: row.visits,
+    createdAt: row.created_at,
+  };
+}
+
+function listStores() {
+  const rows = db.prepare(`
+    SELECT stores.store_id AS id, stores.uuid, stores.name, categories.name AS category,
+      stores.description, stores.phone, stores.address, stores.location_lat,
+      stores.location_lng, stores.open_hours, stores.order_type, stores.visits,
+      stores.created_at
+    FROM stores
+    LEFT JOIN categories ON categories.category_id = stores.category_id AND categories.deleted_at IS NULL
+    WHERE stores.deleted_at IS NULL
+    ORDER BY stores.store_id
+  `).all();
+  return rows.map(mapStore);
+}
+
 // 공백·특수문자 제거 + 소문자 + 유니코드 정규화 (간판 글자와 키워드 비교용)
 // 예: "월계·손 칼국수!" → "월계손칼국수"
 function normalize(text) {
@@ -52,7 +93,7 @@ function normalize(text) {
 
 // 가게 목록 반환 (category 일치, keyword는 이름·signKeywords 부분 일치, 좌표가 있으면 거리순 정렬)
 function getAllStores({ category, keyword, lat, lng } = {}) {
-  let result = stores;
+  let result = listStores();
 
   if (category !== undefined) {
     result = result.filter((store) => store.category === category);
@@ -81,7 +122,16 @@ function getAllStores({ category, keyword, lat, lng } = {}) {
 
 // 원본 가게 객체 찾기 (내부용 — 없으면 null). id는 이미 검사된 정수
 function findStore(id) {
-  return stores.find((s) => s.id === id) ?? null;
+  const row = db.prepare(`
+    SELECT stores.store_id AS id, stores.uuid, stores.name, categories.name AS category,
+      stores.description, stores.phone, stores.address, stores.location_lat,
+      stores.location_lng, stores.open_hours, stores.order_type, stores.visits,
+      stores.created_at
+    FROM stores
+    LEFT JOIN categories ON categories.category_id = stores.category_id AND categories.deleted_at IS NULL
+    WHERE stores.store_id = ? AND stores.deleted_at IS NULL
+  `).get(id);
+  return row ? mapStore(row) : null;
 }
 
 // 방문 1회 기록. 같은 사용자가 VISIT_DEDUP_MS 안에 다시 오면 세지 않는다
@@ -95,6 +145,7 @@ function recordVisit(store, visitorKey, now = Date.now()) {
   const key = `${store.id}|${visitorKey}`;
   if (recentVisits.has(key)) return;
 
+  db.prepare('UPDATE stores SET visits = visits + 1 WHERE store_id = ?').run(store.id);
   store.visits += 1;
   recentVisits.set(key, now);
   if (recentVisits.size > MAX_VISIT_RECORDS) {
@@ -112,7 +163,7 @@ function getStoreById(id, { visitorKey } = {}) {
 
 // 오늘의 동네 추천: 신규 가게(최근 등록순) → 저활성 가게(방문 적은 순)
 function getRecommendedStores({ lat, lng } = {}) {
-  let candidates = stores;
+  let candidates = listStores();
 
   if (lat !== undefined && lng !== undefined) {
     const origin = { lat, lng };
@@ -137,7 +188,7 @@ function matchStoresByText(text) {
   const target = normalize(text);
   if (!target) return [];
 
-  return stores
+  return listStores()
     .map((store) => {
       const name = normalize(store.name);
       const hits = [...new Set(store.signKeywords.map(normalize))].filter(

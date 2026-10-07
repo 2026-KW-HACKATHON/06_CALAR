@@ -1,4 +1,6 @@
-const orders = require('../data/orders');
+const { randomUUID } = require('node:crypto');
+const db = require('../db');
+const { transaction } = require('./transaction');
 const { findStore, isOpenAt } = require('./storeService');
 const HttpError = require('../utils/httpError');
 const { DAY_MS, nowKSTString, parseLocalDateTime } = require('../utils/time');
@@ -19,8 +21,6 @@ const MAX_PICKUP_DAYS = 30; // 픽업/예약은 최대 30일 뒤까지
 
 // 휴대폰(010-1234-5678), 서울(02-123-4567), 지역번호(031-123-4567), 하이픈 없는 형식 허용
 const PHONE_PATTERN = /^0\d{1,2}-?\d{3,4}-?\d{4}$/;
-
-let nextId = Math.max(0, ...orders.map((o) => o.id)) + 1;
 
 // items 검사 + 같은 메뉴는 하나로 합침 → { orderItems, totalPrice }
 function buildOrderItems(store, items) {
@@ -75,12 +75,24 @@ function validatePickupTime(store, pickupTime) {
 }
 
 // 주문 생성 (검증 실패 시 HttpError를 던진다)
-function createOrder(body) {
+function createOrder(body, { customerId } = {}) {
   if (!isPlainObject(body)) {
     throw new HttpError(400, 'Request body must be a JSON object');
   }
 
   const { storeId, items, pickupTime, customerPhone } = body;
+  const paymentMethod = body.paymentMethod ?? 'onsite';
+  if (!['onsite', 'credit'].includes(paymentMethod)) throw new HttpError(400, 'Invalid paymentMethod');
+  if (paymentMethod === 'credit' && (!customerId || typeof body.requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.requestId))) throw new HttpError(400, 'Credit payment requires a requestId and login');
+  if (paymentMethod === 'credit') {
+    const previous = db.prepare('SELECT order_id FROM orders WHERE customer_id = ? AND payment_reference = ?').get(customerId, body.requestId);
+    if (previous) {
+      const existing = getOrderById(previous.order_id);
+      const normalizeItems = (value) => JSON.stringify(value.map(({ menuId, quantity }) => ({ menuId, quantity })).sort((a, b) => a.menuId - b.menuId));
+      if (!Array.isArray(items) || existing.storeId !== storeId || existing.pickupTime !== pickupTime || existing.customerPhone !== customerPhone || normalizeItems(existing.items) !== normalizeItems(items)) throw new HttpError(409, 'Payment request already used for another order');
+      return existing;
+    }
+  }
 
   for (const field of ['storeId', 'items', 'pickupTime', 'customerPhone']) {
     if (body[field] === undefined || body[field] === null || body[field] === '') {
@@ -108,23 +120,46 @@ function createOrder(body) {
     throw new HttpError(400, 'Invalid customerPhone format');
   }
 
-  const order = {
-    id: nextId++,
-    storeId,
-    items: orderItems,
-    totalPrice,
-    pickupTime,
-    customerPhone,
-    status: 'pending',
-    createdAt: nowKSTString(),
-  };
-  orders.push(order);
-  return order;
+  const createdAt = nowKSTString();
+  let orderId;
+  db.exec('BEGIN');
+  try {
+    const result = db.prepare(`
+      INSERT INTO orders (uuid, customer_id, store_id, total_price, pickup_time, customer_phone, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(randomUUID(), customerId ?? null, storeId, totalPrice, pickupTime, customerPhone, createdAt);
+    orderId = Number(result.lastInsertRowid);
+    if (paymentMethod === 'credit') {
+      db.prepare("UPDATE orders SET payment_method = 'credit', payment_reference = ? WHERE order_id = ?").run(body.requestId, orderId);
+      require('./creditService').change(customerId, -totalPrice, 'payment', String(orderId));
+    }
+
+    const insertItem = db.prepare('INSERT INTO items (uuid, order_id, menu_id, quantity, unit_price) VALUES (?, ?, ?, ?, ?)');
+    for (const item of orderItems) {
+      const menu = store.menu.find((entry) => entry.id === item.menuId);
+      insertItem.run(randomUUID(), orderId, item.menuId, item.quantity, menu.price);
+
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return getOrderById(orderId);
 }
 
 // id로 주문 하나 찾기 (없으면 null). id는 이미 검사된 정수
 function getOrderById(id) {
-  return orders.find((o) => o.id === id) ?? null;
+  const row = db.prepare(`
+    SELECT order_id AS id, uuid, store_id AS storeId, total_price AS totalPrice,
+      pickup_time AS pickupTime, customer_phone AS customerPhone, status,
+      created_at AS createdAt, payment_method, customer_id
+    FROM orders WHERE order_id = ?
+  `).get(id);
+  if (!row) return null;
+  const items = db.prepare('SELECT menu_id AS menuId, uuid, quantity FROM items WHERE order_id = ? ORDER BY item_id').all(id);
+  const { payment_method, customer_id, ...publicOrder } = row;
+  return { ...publicOrder, items, ...(payment_method === 'credit' ? { paymentMethod: 'credit' } : {}) };
 }
 
 // 가게로 들어온 주문 목록 (status 필터, 픽업 시간 빠른 순 → 같으면 먼저 들어온 순)
@@ -136,10 +171,10 @@ function getOrdersByStore(storeId, status) {
     throw new HttpError(400, 'Invalid status value');
   }
 
-  return orders
-    .filter((o) => o.storeId === storeId)
-    .filter((o) => status === undefined || o.status === status)
-    .sort((a, b) => a.pickupTime.localeCompare(b.pickupTime) || a.id - b.id);
+  const rows = status === undefined
+    ? db.prepare('SELECT order_id FROM orders WHERE store_id = ? ORDER BY pickup_time, order_id').all(storeId)
+    : db.prepare('SELECT order_id FROM orders WHERE store_id = ? AND status = ? ORDER BY pickup_time, order_id').all(storeId, status);
+  return rows.map((row) => getOrderById(row.order_id));
 }
 
 // 주문 상태 변경 (수락/거절/완료)
@@ -167,6 +202,14 @@ function updateOrderStatus(id, body) {
     throw new HttpError(409, `Cannot change status from ${order.status} to ${status}`);
   }
 
+  transaction(() => {
+    db.prepare('UPDATE orders SET status = ? WHERE order_id = ?').run(status, id);
+    if (status === 'rejected' && order.paymentMethod === 'credit' && order.totalPrice > 0) {
+      const payer = db.prepare('SELECT customer_id FROM orders WHERE order_id = ?').get(id);
+      require('./creditService').change(payer.customer_id, order.totalPrice, 'refund', String(id));
+    }
+
+  });
   order.status = status;
   return order;
 }

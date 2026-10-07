@@ -6,6 +6,8 @@ const signRecognizer = require('../services/signRecognizer');
 const HttpError = require('../utils/httpError');
 const { getImageInfo } = require('../utils/imageInfo');
 const { parseId, optionalQueryString, parseLocation } = require('../utils/validate');
+const auth = require('./auth');
+const managementService = require('../services/managementService');
 
 const router = express.Router();
 
@@ -86,13 +88,15 @@ router.get('/:id', (req, res) => {
 });
 
 // 가게로 들어온 주문 목록 조회 (점주용)
-router.get('/:id/orders', (req, res) => {
+router.get('/:id/orders', auth.requireUser, auth.requireRole('owner', 'admin'), (req, res) => {
   const id = parseId(req.params.id);
   if (!id) {
     throw new HttpError(404, 'Store not found');
   }
   const status = optionalQueryString(req.query, 'status');
-  res.json(orderService.getOrdersByStore(id, status));
+  res.json(req.user.role === 'admin'
+    ? orderService.getOrdersByStore(id, status)
+    : managementService.ownerOrders(req.user, id, status));
 });
 
 module.exports = router;

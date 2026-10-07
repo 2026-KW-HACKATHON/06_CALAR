@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "admin:provision": "node scripts/provision-admin.js",
     "test": "node --test \"test/**/*.test.js\""
   },
   "keywords": [],
@@ -17,9 +18,10 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "multer": "^2.4.0",
+    "nodemailer": "^10.0.15",
     "tesseract.js": "^7.0.0"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.5.0"
   }
 }

@@ -7,9 +7,23 @@ const { startServer } = require('./helpers');
 const NOON_KST = Date.parse('2026-10-01T03:00:00Z');
 
 let server;
+let adminHeaders;
+let customerHeaders;
 test.before(async () => {
   test.mock.timers.enable({ apis: ['Date'], now: NOON_KST });
   server = await startServer();
+  const login = await server.request('POST', '/api/auth/login', {
+    json: { email: 'test-admin@calar.local', password: 'test-admin-password-2026' },
+  });
+  const customer = await server.request('POST', '/api/auth/register', {
+    json: { email: 'orders-customer@calar.local', password: 'orders-customer-password', displayName: 'Order Customer' },
+  });
+  assert.equal(customer.status, 201);
+  const customerLogin = await server.request('POST', '/api/auth/login', {
+    json: { email: 'orders-customer@calar.local', password: 'orders-customer-password' },
+  });
+  customerHeaders = { authorization: `Bearer ${customerLogin.body.token}` };
+  adminHeaders = { authorization: `Bearer ${login.body.token}` };
 });
 test.after(async () => {
   await server.close();
@@ -22,8 +36,8 @@ const valid = () => ({
   pickupTime: '2026-10-02T12:30',
   customerPhone: '010-1234-5678',
 });
-const post = (json) => server.request('POST', '/api/orders', { json });
-const patch = (id, json) => server.request('PATCH', `/api/orders/${id}/status`, { json });
+const post = (json) => server.request('POST', '/api/orders', { json, headers: customerHeaders });
+const patch = (id, json) => server.request('PATCH', `/api/orders/${id}/status`, { json, headers: adminHeaders });
 
 // 400 + 에러 메시지 확인
 async function expectError(res, status, error) {
@@ -49,10 +63,11 @@ test('POST /api/orders: 정상 생성, 서버가 가격·상태·시각을 정�
   assert.equal(res.status, 201);
   assert.deepEqual(res.body, {
     id: res.body.id,
+    uuid: res.body.uuid,
     storeId: 1,
     items: [
-      { menuId: 101, quantity: 3 },
-      { menuId: 102, quantity: 1 },
+      { menuId: 101, uuid: res.body.items[0].uuid, quantity: 3 },
+      { menuId: 102, uuid: res.body.items[1].uuid, quantity: 1 },
     ],
     totalPrice: 8000 * 3 + 6000,
     pickupTime: '2026-10-02T12:30',
@@ -60,6 +75,7 @@ test('POST /api/orders: 정상 생성, 서버가 가격·상태·시각을 정�
     status: 'pending',
     createdAt: '2026-10-01T12:00',
   });
+  assert.match(res.body.uuid, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.notEqual(res.body.id, 999);
 
   // 예약만 받는 가게도 주문 가능, 다양한 전화번호 형식
@@ -70,15 +86,15 @@ test('POST /api/orders: 정상 생성, 서버가 가격·상태·시각을 정�
 });
 
 test('POST /api/orders: body 형식', async () => {
-  await expectError(server.request('POST', '/api/orders'), 400, 'Request body must be a JSON object');
+  await expectError(server.request('POST', '/api/orders', { headers: customerHeaders }), 400, 'Request body must be a JSON object');
   await expectError(post([valid()]), 400, 'Request body must be a JSON object');
   await expectError(
-    server.request('POST', '/api/orders', { body: '{"storeId":', headers: { 'content-type': 'application/json' } }),
+    server.request('POST', '/api/orders', { body: '{"storeId":', headers: { ...customerHeaders, 'content-type': 'application/json' } }),
     400,
     'Invalid JSON body'
   );
   await expectError(
-    server.request('POST', '/api/orders', { body: 'storeId=1', headers: { 'content-type': 'application/x-www-form-urlencoded' } }),
+    server.request('POST', '/api/orders', { body: 'storeId=1', headers: { ...customerHeaders, 'content-type': 'application/x-www-form-urlencoded' } }),
     400,
     'Request body must be a JSON object'
   );
@@ -149,7 +165,7 @@ test('POST /api/orders: customerPhone', async () => {
 
 test('GET /api/orders/:id', async () => {
   const created = (await post(valid())).body;
-  const res = await server.request('GET', `/api/orders/${created.id}`);
+  const res = await server.request('GET', `/api/orders/${created.id}`, { headers: customerHeaders });
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, created);
   for (const id of ['99999', '0', 'abc', '1.0']) {
@@ -158,7 +174,7 @@ test('GET /api/orders/:id', async () => {
 });
 
 test('GET /api/stores/:id/orders: 필터와 정렬', async () => {
-  const list = async (query = '') => server.request('GET', `/api/stores/4/orders${query}`);
+  const list = async (query = '') => server.request('GET', `/api/stores/4/orders${query}`, { headers: adminHeaders });
   const a = (await post({ ...valid(), storeId: 4, items: [{ menuId: 401, quantity: 1 }], pickupTime: '2026-10-03T09:00' })).body;
   const b = (await post({ ...valid(), storeId: 4, items: [{ menuId: 402, quantity: 1 }], pickupTime: '2026-10-02T09:00' })).body;
   const c = (await post({ ...valid(), storeId: 4, items: [{ menuId: 402, quantity: 2 }], pickupTime: '2026-10-02T09:00' })).body;
@@ -174,16 +190,16 @@ test('GET /api/stores/:id/orders: 필터와 정렬', async () => {
   assert.equal((await list('?status=')).body.length, all.length); // 빈 값 = 전체
   await expectError(list('?status=foo'), 400, 'Invalid status value');
   await expectError(list('?status=pending&status=done'), 400, /status/);
-  await expectError(server.request('GET', '/api/stores/999/orders'), 404, 'Store not found');
-  await expectError(server.request('GET', '/api/stores/abc/orders'), 404, 'Store not found');
-  assert.deepEqual((await server.request('GET', '/api/stores/5/orders')).body, []); // 주문 안 받는 가게
+  await expectError(server.request('GET', '/api/stores/999/orders', { headers: adminHeaders }), 404, 'Store not found');
+  await expectError(server.request('GET', '/api/stores/abc/orders', { headers: adminHeaders }), 404, 'Store not found');
+  assert.deepEqual((await server.request('GET', '/api/stores/5/orders', { headers: adminHeaders })).body, []); // 주문 안 받는 가게
 });
 
 test('PATCH /api/orders/:id/status: 상태 전이 규칙', async () => {
   const id = (await post(valid())).body.id;
 
   await expectError(patch(id, {}), 400, 'status is required');
-  await expectError(server.request('PATCH', `/api/orders/${id}/status`), 400, 'status is required');
+  await expectError(server.request('PATCH', `/api/orders/${id}/status`, { headers: adminHeaders }), 400, 'status is required');
   await expectError(patch(id, [{ status: 'accepted' }]), 400, 'status is required');
   await expectError(patch(id, { status: 'pending' }), 400, 'Cannot change status to pending');
   for (const status of ['foo', 'ACCEPTED', 123, ['accepted'], { v: 1 }]) {
@@ -204,5 +220,5 @@ test('PATCH /api/orders/:id/status: 상태 전이 규칙', async () => {
 
   await expectError(patch(99999, { status: 'accepted' }), 404, 'Order not found');
   await expectError(patch('abc', { status: 'accepted' }), 404, 'Order not found');
-  assert.equal((await server.request('GET', `/api/orders/${id}`)).body.status, 'done'); // 실제로 저장됨
+  assert.equal((await server.request('GET', `/api/orders/${id}`, { headers: customerHeaders })).body.status, 'done'); // 실제로 저장됨
 });

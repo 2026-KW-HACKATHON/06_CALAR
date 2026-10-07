@@ -1,6 +1,13 @@
 // 테스트 공용 함수: 서버 띄우기, 요청 보내기, 테스트용 이미지 만들기
 const zlib = require('zlib');
 const { once } = require('events');
+const os = require('node:os');
+const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+
+process.env.CALAR_DB_PATH = path.join(os.tmpdir(), `06-calar-test-${process.pid}-${randomUUID()}.sqlite`);
+process.env.CALAR_ADMIN_EMAIL = 'test-admin@calar.local';
+process.env.CALAR_ADMIN_PASSWORD = 'test-admin-password-2026';
 
 // 테스트용 서버를 빈 포트에 띄운다
 async function startServer() {

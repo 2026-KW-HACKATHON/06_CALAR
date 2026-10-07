@@ -1,0 +1,14 @@
+{
+  "appId": "kr.calar.app",
+  "appName": "CALAR",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "ios": {
+    "contentInset": "automatic"
+  }
+}

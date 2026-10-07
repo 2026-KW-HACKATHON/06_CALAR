@@ -1,0 +1,16 @@
+[Unit]
+Description=CALAR web and API
+After=network.target
+
+[Service]
+Type=simple
+User=calar
+WorkingDirectory=/srv/06_CALAR
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /srv/06_CALAR/scripts/start-server.cjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

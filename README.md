@@ -17,14 +17,28 @@
 
 | 폴더 | 설명 | 스택 |
 |------|------|------|
-| `frontend/` | 사용자 화면 | React |
+| `frontend/` | 고객·점주·관리자 화면 | React / Vite |
 | `backend/` | 서버·API·추천 로직 | Node.js |
 | `image-proc/` | 간판 인식·이미지 처리 | C / Rust |
 | `docs/` | 기획안·설계 문서 | - |
 
 ## 개발 환경
 
-(추후 작성: 설치 방법, 실행 방법)
+- Node.js 22.5 이상 필요 (`node:sqlite` 내장 사용)
+- 백엔드: `cd backend` 후 `npm install`, `npm start` (기본 `http://localhost:3000`)
+- 프론트엔드: 별도 터미널에서 `cd frontend` 후 `npm install`, `npm run dev` (기본 `http://localhost:5173`)
+- 서버 시작 시 `backend/setup.sql`을 적용하고 초기 데이터가 없는 항목을 시드합니다.
+- SQLite 파일은 기본적으로 `backend/06_calar.sqlite`에 생성됩니다. 다른 경로는 `CALAR_DB_PATH` 환경 변수로 지정할 수 있습니다.
+- 모든 DB 레코드에는 고유 UUID v4가 있으며, 기존 정수 기본키는 관계와 API 호환성을 위해 내부 키로 유지됩니다.
+- 최초 관리자 계정은 실행 전에 `CALAR_ADMIN_EMAIL`과 12자 이상 `CALAR_ADMIN_PASSWORD`를 설정하면 생성됩니다. 관리자 계정은 DB에 없을 때만 추가됩니다.
+- 점주 가입 시 사업자번호 체크섬을 확인하고 관리자 승인 전까지 가게 관리 기능을 제한합니다. 국세청 진위 확인은 별도 API 연동이 필요합니다.
+
+```powershell
+$env:CALAR_ADMIN_EMAIL = 'admin@example.com'
+$env:CALAR_ADMIN_PASSWORD = 'replace-with-a-unique-password'
+cd backend
+npm start
+```
 
 ## 팀
 
