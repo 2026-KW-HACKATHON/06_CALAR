@@ -1,8 +1,11 @@
 # ---- Node.js (frontend / backend) ----
 node_modules/
+.vite/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.sqlite
+*.sqlite-*
 dist/
 build/
 .env
@@ -12,6 +15,7 @@ build/
 # ---- Rust (image-proc) ----
 target/
 Cargo.lock
+!image-proc/Cargo.lock
 **/*.rs.bk
 
 # ---- C / C++ (image-proc) ----
@@ -35,3 +39,7 @@ a.out
 *.log
 tmp/
 temp/
+
+# ---- OCR (tesseract.js 언어 데이터, 첫 실행 시 자동 다운로드) ----
+.ocr-cache/
+*.traineddata

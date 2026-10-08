@@ -1,0 +1,28 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "admin:provision": "node scripts/provision-admin.js",
+    "evaluate:signs": "node scripts/evaluate-signs.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/kor": "^1.0.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.15",
+    "tesseract.js": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

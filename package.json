@@ -1,0 +1,11 @@
+{
+  "name": "calar-server", "version": "1.0.0", "private": true,
+  "workspaces": ["backend", "frontend"],
+  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "build": "npm run build --workspace frontend",
+    "prestart": "npm run build",
+    "start": "node scripts/start-server.cjs",
+    "test": "npm test --workspace backend"
+  }
+}

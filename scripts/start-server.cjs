@@ -1,0 +1,11 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const envFile = path.join(__dirname, '../backend/.env');
+if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
+process.env.NODE_ENV = 'production';
+process.env.CALAR_DEV_CREDIT = 'false';
+process.env.PORT ||= '8008';
+process.env.HOST ||= '127.0.0.1';
+process.env.CALAR_PUBLIC_URL ||= 'https://wolgye.kr';
+if (!fs.existsSync(path.join(__dirname, '../frontend/dist/index.html'))) throw new Error('Frontend build missing. Run npm run build.');
+require('../backend/index');
