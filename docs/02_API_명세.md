@@ -54,7 +54,7 @@
 | `visits` | number | 조회수/방문수. 추천 목록 정렬에 쓰일 예정 |
 | `createdAt` | string | 가게 등록일 (`YYYY-MM-DD` 형식, 한국 시간 기준) |
 
-> 🎟️ **쿠폰 고르는 규칙**: DB에는 가게마다 쿠폰이 여러 개 있을 수 있습니다. 백엔드는 `is_active = 1`이고 지금 시각이 `valid_from` ~ `valid_until` 사이인(비어 있으면 제한 없음) 쿠폰 중에서 **할인율(`discountRate`)이 가장 큰 것** 1개를 고릅니다. 할인율이 같으면 먼저 만든 쿠폰(`coupon_id`가 작은 것)을 고릅니다.
+> 🎟️ **쿠폰 고르는 규칙**: DB에는 가게마다 쿠폰이 여러 개 있을 수 있습니다. 백엔드는 `is_active = 1`이고 오늘(한국 날짜)이 `valid_from` ~ `valid_until` 사이인(비어 있으면 제한 없음) 쿠폰 중에서 **먼저 만든 쿠폰(`coupon_id`가 가장 작은 것)** 1개를 고릅니다.
 
 > 💡 **`null`과 빈 값의 차이**: `coupon`이 없는 가게는 `"coupon": null` 로 옵니다. 프론트에서는 `if (store.coupon)` 처럼 체크하고 쿠폰 카드를 보여줄지 말지 결정하면 됩니다.
 
@@ -77,7 +77,7 @@
   "id": 1,
   "storeId": 1,
   "items": [
-    { "menuId": 101, "name": "바지락 칼국수", "unitPrice": 8000, "quantity": 2 }
+    { "menuId": 101, "quantity": 2 }
   ],
   "totalPrice": 16000,
   "pickupTime": "2026-10-08T12:30",
@@ -93,21 +93,12 @@
 |---|---|---|
 | `id` | number | 주문 고유 번호 |
 | `storeId` | number | 어느 가게에 낸 주문인지 (Store의 `id`와 연결) |
-| `items` | 배열 | 주문한 메뉴 목록. 아래 항목별 설명 참고 |
+| `items` | 배열 | 주문한 메뉴 목록. `menuId`로 어떤 메뉴인지, `quantity`로 몇 개인지 표시 |
 | `totalPrice` | number | 총 결제 금액 |
 | `pickupTime` | string | 픽업/예약 시간 (`YYYY-MM-DDTHH:mm` 형식, ISO 8601이라고 부름. 한국 시간 기준) |
 | `customerPhone` | string | 주문한 고객 연락처 |
 | `status` | string | 아래 표 참고 |
-| `createdAt` | string | 주문 생성 시각 (`YYYY-MM-DDTHH:mm`, 한국 시간 기준. DB에는 UTC로 저장되지만 백엔드가 변환해서 내려줍니다) |
-
-**`items` 항목별 설명** (응답에만 해당. 주문 생성 요청에는 `menuId`, `quantity`만 보냄)
-
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `menuId` | number 또는 `null` | 주문한 메뉴 id. 그 메뉴가 나중에 삭제되면 `null` |
-| `name` | string | 주문 당시 메뉴 이름 (메뉴가 바뀌거나 지워져도 그대로 남음) |
-| `unitPrice` | number | 주문 당시 메뉴 1개 가격 (원) |
-| `quantity` | number | 수량 |
+| `createdAt` | string | 주문 생성 시각 (`YYYY-MM-DDTHH:mm`, 한국 시간 기준. 서버가 생성) |
 
 **`status` 값의 흐름**
 
@@ -150,14 +141,15 @@ Authorization: Bearer <토큰>
 
 | API | 누가 쓸 수 있나 |
 |---|---|
-| 2-5 주문 생성 | 로그인한 고객 (비회원 세션 포함) |
-| 2-6 주문 상태 조회 | 그 주문을 만든 고객 본인 |
-| 2-7 가게별 주문 목록, 2-8 주문 상태 변경 | 그 가게의 점주 본인 (`stores.owner_id`와 로그인한 사용자 id가 같아야 함) |
+| 2-5 주문 생성 | 로그인한 고객 (주문이 그 계정에 연결됨) |
+| 2-6 주문 상태 조회 | 주문한 고객 본인, 그 가게의 점주, 관리자 |
+| 2-7 가게별 주문 목록, 2-8 주문 상태 변경 | 그 가게의 점주 (`stores.owner_id`와 로그인한 사용자 id가 같아야 함), 관리자 |
 
 | 상황 | 상태 코드 | 예시 |
 |---|---|---|
-| 토큰이 없거나 만료됨 | `401` | `{ "error": "Authentication required" }` |
-| 로그인은 했지만 내 주문/내 가게가 아님 | `403` | `{ "error": "Forbidden" }` |
+| 토큰이 없음 | `401` | `{ "error": "Authentication required" }` |
+| 토큰이 틀렸거나 만료됨 | `401` | `{ "error": "Invalid or expired session" }` |
+| 로그인은 했지만 내 주문/내 가게가 아님 | `403` | 각 API의 에러 표 참고 |
 
 > ⚠️ 주문 번호는 1, 2, 3 … 순서대로 매겨지기 때문에, 이 확인이 없으면 누구나 번호를 바꿔 가며 다른 사람의 주문(전화번호 포함)을 보거나 바꿀 수 있습니다. 백엔드는 2-6 ~ 2-8에서 반드시 본인 확인을 해야 합니다.
 
@@ -175,7 +167,7 @@ GET /api/stores
 
 | 파라미터 | 타입 | 설명 | 예시 |
 |---|---|---|---|
-| `category` | string | 업종으로 필터링. 하위 카테고리에 속한 가게도 포함 (예: `한식` → 국밥, 돼지국밥 가게도 나옴) | `음식점` |
+| `category` | string | 업종으로 필터링. 이름이 정확히 같은 카테고리의 가게만 (하위 카테고리는 포함 안 함) | `음식점` |
 | `keyword` | string | 이름/키워드로 검색 | `칼국수` |
 | `lat`, `lng` | number | 현재 위치 기준 거리순 정렬용 좌표 | `37.62`, `127.06` |
 
@@ -359,7 +351,7 @@ POST /api/orders
 {
   "id": 1,
   "storeId": 1,
-  "items": [{ "menuId": 101, "name": "바지락 칼국수", "unitPrice": 8000, "quantity": 2 }],
+  "items": [{ "menuId": 101, "quantity": 2 }],
   "totalPrice": 16000,
   "pickupTime": "2026-10-08T12:30",
   "customerPhone": "010-0000-0000",
@@ -408,8 +400,8 @@ GET /api/orders/1
 
 | 상황 | 상태 코드 | 예시 |
 |---|---|---|
-| 토큰 없음 | `401` | `{ "error": "Authentication required" }` |
-| 다른 사람의 주문 | `403` | `{ "error": "Forbidden" }` |
+| 토큰 없음 | `401` | `{ "error": "Authentication required to view this order" }` |
+| 주문자·그 가게 점주·관리자가 아님 | `403` | `{ "error": "You do not have access to this order" }` |
 | 해당 `id`의 주문이 없음 | `404` | `{ "error": "Order not found" }` |
 
 ---
@@ -447,7 +439,7 @@ GET /api/stores/1/orders?status=pending
 | 상황 | 상태 코드 | 예시 |
 |---|---|---|
 | 토큰 없음 | `401` | `{ "error": "Authentication required" }` |
-| 내 가게가 아님 | `403` | `{ "error": "Forbidden" }` |
+| 내 가게가 아님 | `403` | `{ "error": "You do not manage this store" }` |
 | 해당 `id`의 가게가 없음 | `404` | `{ "error": "Store not found" }` |
 | `status` 값이 허용 목록에 없는 값 | `400` | `{ "error": "Invalid status value" }` |
 
@@ -498,7 +490,7 @@ PATCH /api/orders/:id/status
 | 상황 | 상태 코드 | 예시 |
 |---|---|---|
 | 토큰 없음 | `401` | `{ "error": "Authentication required" }` |
-| 내 가게의 주문이 아님 | `403` | `{ "error": "Forbidden" }` |
+| 내 가게의 주문이 아님 | `403` | `{ "error": "You do not manage this order" }` |
 | 해당 `id`의 주문이 없음 | `404` | `{ "error": "Order not found" }` |
 | 허용 안 되는 `status` 값 (예: `pending`으로 되돌리기 시도) | `400` | `{ "error": "Cannot change status to pending" }` |
 | 지금 상태에서 갈 수 없는 상태로 변경 (예: `pending → done`, `accepted → rejected`) | `409` | `{ "error": "Cannot change status from pending to done" }` |
