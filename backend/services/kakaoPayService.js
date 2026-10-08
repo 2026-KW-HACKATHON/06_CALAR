@@ -40,6 +40,7 @@ async function request(action, body) {
 }
 
 function payment(userId, id) {
+  if (typeof id !== 'string' || !id) throw new HttpError(400, 'paymentId is required');
   const row = db.prepare('SELECT * FROM credit_payments WHERE uuid = ? AND user_id = ?').get(id, userId);
   if (!row) throw new HttpError(404, 'Payment not found');
   return row;

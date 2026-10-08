@@ -27,6 +27,8 @@ test('KakaoPay validates ownership and amount, grants once, and recovers lost ap
     const first = await kakao.ready(user.id, request);
     assert.equal((await kakao.ready(user.id, request)).paymentId, first.paymentId);
     await assert.rejects(kakao.approve(other.id, { paymentId: first.paymentId, pgToken: 'token' }), /not found/);
+    await assert.rejects(kakao.approve(user.id, {}), { status: 400, message: 'paymentId is required' });
+    await assert.rejects(kakao.approve(user.id, { paymentId: 123 }), { status: 400 });
     await kakao.approve(user.id, { paymentId: first.paymentId, pgToken: 'token' });
     await kakao.approve(user.id, { paymentId: first.paymentId });
     assert.equal(approvedCalls, 1);

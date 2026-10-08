@@ -39,20 +39,37 @@ function optionalUser(req, res, next) {
   next();
 }
 
-const recoveryAttempts = new Map();
-function recoveryLimit(req, res, next) {
-  const now = Date.now();
-  for (const [key, value] of recoveryAttempts) if (value.until <= now) recoveryAttempts.delete(key);
-  const key = req.ip;
-  const value = recoveryAttempts.get(key) || { count: 0, until: now + 15 * 60 * 1000 };
-  if (value.count >= 10) return next(new HttpError(429, 'Too many recovery attempts'));
-  value.count += 1; recoveryAttempts.set(key, value); next();
+// IP별 요청 제한 (15분 단위). 용도마다 따로 센다.
+// 문자 인증은 고객 로그인 수단이라, 가게·행사장처럼 여러 사람이 같은 와이파이(같은 IP)를 쓰면
+// 이메일 복구와 같은 바구니로 10번만 허용할 때 정상 사용자도 막힌다
+const LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const limitBuckets = new Map();
+function ipLimit(name, max, { countFailuresOnly = false } = {}) {
+  return (req, res, next) => {
+    const now = Date.now();
+    for (const [key, value] of limitBuckets) if (value.until <= now) limitBuckets.delete(key);
+    const key = `${name}|${req.ip}`;
+    const value = limitBuckets.get(key) || { count: 0, until: now + LIMIT_WINDOW_MS };
+    if (value.count >= max) return next(new HttpError(429, 'Too many recovery attempts'));
+    limitBuckets.set(key, value);
+    if (countFailuresOnly) {
+      res.on('finish', () => { if (res.statusCode >= 400) value.count += 1; });
+    } else {
+      value.count += 1;
+    }
+    next();
+  };
 }
+// 문자 발송: 비용이 드니 IP당 상한 (같은 번호 재발송은 phoneService가 60초 간격으로 따로 막는다)
+const smsSendLimit = ipLimit('sms-send', 30);
+// 코드 확인: 틀린 시도만 센다 (요청 1건당 5회 제한은 phoneService가 따로 한다)
+const smsCheckLimit = ipLimit('sms-check', 20, { countFailuresOnly: true });
+const recoveryLimit = ipLimit('recovery', 10);
 
-router.post('/phone/send-code', recoveryLimit, async (req, res) => {
+router.post('/phone/send-code', smsSendLimit, async (req, res) => {
   res.json(await require('../services/phoneService').sendCode(req.body));
 });
-router.post('/phone/check-code', recoveryLimit, async (req, res) => {
+router.post('/phone/check-code', smsCheckLimit, async (req, res) => {
   res.json(await require('../services/phoneService').checkCode(req.body));
 });
 

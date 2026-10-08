@@ -55,6 +55,18 @@ function buildOrderItems(store, items) {
   return { orderItems, totalPrice };
 }
 
+// 같은 메뉴를 합친 뒤의 주문 항목 비교용 문자열 (저장된 주문은 이미 합쳐져 있다). 형식이 틀리면 null
+// 결제 재시도 요청이 기존 주문과 같은지 확인할 때 쓴다
+function mergedItemsKey(items) {
+  if (!Array.isArray(items) || !items.every(isPlainObject)) return null;
+  const merged = new Map();
+  for (const { menuId, quantity } of items) {
+    if (!Number.isInteger(menuId) || !Number.isInteger(quantity)) return null;
+    merged.set(menuId, (merged.get(menuId) ?? 0) + quantity);
+  }
+  return JSON.stringify([...merged].sort(([a], [b]) => a - b));
+}
+
 // pickupTime 검사: 형식·실제 날짜 → 과거 아님 → 30일 이내 → 가게 영업시간 안
 function validatePickupTime(store, pickupTime) {
   const parsed = parseLocalDateTime(pickupTime);
@@ -88,8 +100,8 @@ function createOrder(body, { customerId } = {}) {
     const previous = db.prepare('SELECT order_id FROM orders WHERE customer_id = ? AND payment_reference = ?').get(customerId, body.requestId);
     if (previous) {
       const existing = getOrderById(previous.order_id);
-      const normalizeItems = (value) => JSON.stringify(value.map(({ menuId, quantity }) => ({ menuId, quantity })).sort((a, b) => a.menuId - b.menuId));
-      if (!Array.isArray(items) || existing.storeId !== storeId || existing.pickupTime !== pickupTime || existing.customerPhone !== customerPhone || normalizeItems(existing.items) !== normalizeItems(items)) throw new HttpError(409, 'Payment request already used for another order');
+      const requested = mergedItemsKey(items);
+      if (requested === null || existing.storeId !== storeId || existing.pickupTime !== pickupTime || existing.customerPhone !== customerPhone || mergedItemsKey(existing.items) !== requested) throw new HttpError(409, 'Payment request already used for another order');
       return existing;
     }
   }

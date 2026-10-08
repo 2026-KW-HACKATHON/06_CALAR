@@ -168,7 +168,8 @@ function login(body) {
   if (!user || typeof body.password !== 'string' || !verifyPassword(body.password, user.password_hash)) {
     throw new HttpError(401, 'Email or password is incorrect');
   }
-  db.prepare("DELETE FROM user_sessions WHERE expires_at <= datetime('now')").run();
+  // expires_at은 ISO 형식(2026-10-08T01:00:00.000Z)이라 SQLite datetime('now')(공백 구분)와 문자열 비교하면 안 맞는다
+  db.prepare('DELETE FROM user_sessions WHERE expires_at <= ?').run(new Date().toISOString());
   return { ...createSession(user.user_id), user: publicUser(user.user_id) };
 }
 
@@ -194,7 +195,8 @@ function listUserOrders(userId) {
     .map(({ id }) => require('./orderService').getOrderById(id));
 }
 
-function provisionAdmin({ email: rawEmail, password, resetPassword = true }) {
+// promoteExisting: 이미 있는 일반 계정을 관리자로 올릴지. 서버 콘솔 스크립트에서만 true(비밀번호도 함께 재설정)
+function provisionAdmin({ email: rawEmail, password, resetPassword = true, promoteExisting = true }) {
   const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
   if (!EMAIL_PATTERN.test(email) || email.length > 254) throw new Error('A valid admin email is required');
   if (typeof password !== 'string' || password.length < 6 || password.length > 128) {
@@ -212,6 +214,12 @@ function provisionAdmin({ email: rawEmail, password, resetPassword = true }) {
       return publicUser(id);
     }
     if (existing.deleted_at) throw new Error('Cannot promote a deleted account');
+    if (existing.role !== 'admin' && !promoteExisting) {
+      throw Object.assign(
+        new Error(`An account with ${email} already exists and is not an admin. Run "npm run admin:provision" from the server console to promote it (this also resets its password).`),
+        { code: 'ADMIN_EMAIL_TAKEN' }
+      );
+    }
     db.prepare('UPDATE users SET role = ?, is_active = 1 WHERE user_id = ?').run('admin', existing.user_id);
 
     if (resetPassword) {
@@ -336,7 +344,14 @@ function bootstrapAdmin() {
   const email = process.env.CALAR_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.CALAR_ADMIN_PASSWORD;
   if (!email && !password) return;
-  provisionAdmin({ email, password, resetPassword: false });
+  // 서버 시작 때는 관리자 계정을 "없으면 만들기"만 한다. 같은 이메일로 누군가 먼저 가입해 둔 일반 계정을
+  // 자동 승격하면 그 사람이 정한 비밀번호로 관리자 로그인이 되므로 승격은 콘솔 스크립트로만 한다
+  try {
+    provisionAdmin({ email, password, resetPassword: false, promoteExisting: false });
+  } catch (error) {
+    if (error.code !== 'ADMIN_EMAIL_TAKEN') throw error;
+    console.error(`[관리자 계정] ${error.message}`);
+  }
 }
 
 bootstrapAdmin();
@@ -349,6 +364,7 @@ module.exports = {
   completePasswordRecovery,
   resetPassword,
   provisionAdmin,
+  bootstrapAdmin,
   createSession,
   isValidBusinessNumber,
   login,
