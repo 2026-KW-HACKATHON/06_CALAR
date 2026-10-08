@@ -1,6 +1,6 @@
 # 백엔드 API 명세 (구현 기준)
 
-> 작성: 2026-09-30 · 브랜치 `feature/backend-setup` · 서버 기본 주소 `http://localhost:3000`
+> 작성: 2026-09-30 · 갱신: 2026-10-08 (계정·결제·관리 기능 반영, 추천 이유, image-proc 간판 전처리) · 서버 기본 주소 `http://localhost:8008`
 > 실제 구현된 코드(`backend/routes/`) 기준으로 정리한 문서임. 각 규칙을 **왜** 그렇게 정했는지는 `docs/03_백엔드_구현현황.md` 참고.
 
 ## 0. 비교 기준이 된 명세 문서
@@ -33,7 +33,7 @@
 | 6 | 주문 상태 조회 | `GET` | `/api/orders/:id` | ✅ | ❌ 없음 | - |
 | 7 | 가게별 주문 목록 (점주) | `GET` | `/api/stores/:id/orders` | ✅ | ❌ 없음 | ➕ 정렬 기준 |
 | 8 | 주문 상태 변경 (점주) | `PATCH` | `/api/orders/:id/status` | ✅ | ❌ 없음 | ➕ 409 세부 규칙 |
-| - | 서버 동작 확인 | `GET` | `/` | ➕ | ❌ | 텍스트 `06_CALAR 백엔드 서버 동작 중.` |
+| - | 서버 동작 확인 | `GET` | `/health` | ➕ | ❌ | 텍스트 `06_CALAR 백엔드 서버 동작 중.` |
 
 ---
 
@@ -57,9 +57,11 @@
 | `orderType` | `"preorder"` / `"reservation"` / `"none"` | 주문 방식 |
 | `signKeywords` | string[] | 간판 인식 매칭용 키워드 |
 | `menu` | `{ id, name, price }[]` | 메뉴 |
-| `coupon` | `{ title, discountRate }` 또는 `null` | 쿠폰 없으면 `null` |
+| `coupon` | `{ uuid, title, discountRate }` 또는 `null` | 사용 중이고 오늘(한국 날짜)이 사용 기간 안인 쿠폰 1개. 없으면 `null`. 금액 할인 쿠폰은 `discountRate: null` ➕ |
 | `visits` | number | 방문수 |
-| `createdAt` | string | `YYYY-MM-DD` |
+| `rating`, `ratingCount` | number / `null`, number | 완료된 주문의 평점 평균(소수 1자리)과 개수. 평점이 없으면 `rating: null` ➕ |
+| `reason` | string | **추천 목록에서만** 포함되는 추천 이유 (`새로 오픈했어요` / `숨어있는 동네 가게예요`) ➕ |
+| `createdAt` | string | `YYYY-MM-DD` (점주가 등록한 가게는 `YYYY-MM-DD HH:mm:ss`) |
 
 ### Order (주문) — 명세 B와 같음 ✅
 
@@ -73,6 +75,7 @@
 | `customerPhone` | string | 고객 연락처 |
 | `status` | `pending` / `accepted` / `rejected` / `done` | 생성 시 `pending` |
 | `createdAt` | string | `YYYY-MM-DDTHH:mm` (한국 시간, 서버가 생성) |
+| `paymentMethod` | `"credit"` | 크레딧 선결제 주문에만 포함 ➕ |
 
 ### 에러 응답 — 명세 B와 같음 ✅
 
@@ -137,6 +140,12 @@
 | `image` | 파일 | ✅ | jpeg / png / webp, 10MB·5천만 화소 이하 | ✅ (형식·크기 숫자는 ➕) |
 | `text` | string | 선택 | **개발용**: 보내면 OCR 대신 이 글자로 매칭 | ➕ |
 
+**처리 과정** ➕
+1. `image-proc`(Rust → WebAssembly)로 사진 전처리: EXIF 회전 보정, 크기 정규화(긴 변 1000~1600px), 글자가 잘 보이는 흑백 채널 선택, 글자를 검게 맞추는 반전, 그림자 평탄화, 이진화.
+2. 전처리 결과를 tesseract.js로 최대 4번(방식을 바꿔가며) 읽음. **가게가 매칭되면 그 자리에서 멈춤** → 대부분 1~2번에 끝남.
+3. 전처리가 불가능한 경우(wasm 파일 없음, 디코딩 실패) 원본 사진을 예전 방식(이진화 2종)으로 읽음.
+- 측정 결과는 `image-proc/README.md` 참고 (합성 사진 기준 평균 약 1초, 최대 약 4초).
+
 **응답** `200`
 
 ```json
@@ -183,12 +192,17 @@
 |---|---|---|
 | `lat`, `lng` | number | 전송 시 반경 2km 이내 가게만 추천 ✅ (반경 수치는 ➕) |
 
-**응답** `200` — `Store[]` (최대 10개). 반경 내 가게가 없으면 `[]`
+**응답** `200` — `Store[]` (최대 10개, 각 가게에 `reason` 포함). 반경 내 가게가 없으면 `[]`
+
+```json
+[{ "id": 5, "name": "모퉁이 카페", "reason": "새로 오픈했어요", "...": "Store 나머지 필드" }]
+```
 
 ➕ **추천 기준** (명세 B에 "신규 또는 저활성 가게 위주"로만 기재되어 수치를 정함)
-1. 신규 가게: 등록 30일 이내, 최근 등록순
-2. 저활성 가게: 방문 30 이하, 방문 적은 순
+1. 신규 가게: 등록 30일 이내, 최근 등록순 → `reason: "새로 오픈했어요"`
+2. 저활성 가게: 방문 30 이하, 방문 적은 순 → `reason: "숨어있는 동네 가게예요"`
 3. 두 기준 모두 해당하지 않으면 제외
+4. 좌표가 없는 가게(점주 화면에서 등록한 가게 등)는 거리를 알 수 없으므로 반경 필터에서 제외하지 않음
 
 **에러**: 3-1의 `lat`/`lng` 에러와 동일
 
@@ -214,8 +228,12 @@
 | `items` | `{ menuId, quantity }[]` | ✅ | 1개 이상. 수량은 1 이상 정수 |
 | `pickupTime` | string | ✅ | `YYYY-MM-DDTHH:mm` (한국 시간) |
 | `customerPhone` | string | ✅ | `010-1234-5678`, `01012345678`, `02-123-4567` 등 |
+| `paymentMethod` | string | 선택 | `onsite`(기본, 현장 결제) / `credit`(크레딧 선결제) ➕ |
+| `requestId` | string | `credit`일 때 ✅ | 요청마다 새로 만든 UUID. 같은 `requestId`로 다시 보내면 새 주문을 만들지 않고 기존 주문을 돌려줌(재시도 안전) ➕ |
 
 - ✅ `id`, `status`, `createdAt`, `totalPrice`는 전송해도 무시되며 서버가 결정함.
+- ➕ `credit` 결제는 주문 생성과 잔액 차감을 한 트랜잭션으로 처리함. 잔액이 부족하면 주문도 만들지 않음.
+- ➕ 재시도 판정은 같은 메뉴를 합친 뒤의 항목으로 비교함. 내용이 다르면 `409 Payment request already used for another order`.
 - ➕ 동일 메뉴가 여러 번 오면 하나로 합산함 (101번 2개 + 101번 1개 → 3개).
 
 **응답** `201` — 생성된 `Order`
@@ -239,6 +257,8 @@
 | `pickupTime`이 30일보다 뒤 | 400 | `pickupTime must be within 30 days` | ➕ |
 | `pickupTime`이 영업시간 밖 | 400 | `pickupTime is outside business hours` | ➕ |
 | 전화번호 형식 틀림 | 400 | `Invalid customerPhone format` | ➕ |
+| 로그인 안 함 | 401 | `Authentication required` | ➕ |
+| 크레딧 잔액 부족 | 400 | `Insufficient credit` | ➕ |
 
 ---
 
@@ -254,10 +274,14 @@
 | 상황 | 코드 | 메시지 | 구분 |
 |---|---|---|---|
 | 해당 주문 없음 (`:id`가 정수가 아닌 경우 포함) | 404 | `Order not found` | ✅ |
+| 계정에 연결된 주문인데 로그인 안 함 | 401 | `Authentication required to view this order` | ➕ |
+| 주문자·해당 점주·관리자가 아님 | 403 | `You do not have access to this order` | ➕ |
 
 ---
 
 ### 3-7. 가게별 주문 목록 `GET /api/stores/:id/orders` — ✅ 명세 B
+
+- ➕ 점주(해당 가게 주인) 또는 관리자만 호출 가능. 점주 화면은 같은 기능의 `GET /api/owner/stores/:id/orders`를 사용함.
 
 **요청 (쿼리, 선택)**
 
@@ -279,6 +303,9 @@
 ---
 
 ### 3-8. 주문 상태 변경 `PATCH /api/orders/:id/status` — ✅ 명세 B
+
+- ➕ 해당 가게 점주 또는 관리자만 호출 가능 (`PATCH /api/owner/orders/:id/status`도 같음).
+- ➕ 크레딧 선결제 주문을 `rejected`로 바꾸면 결제 금액을 자동 환불함.
 
 **요청 (JSON 바디)**: `{ "status": "accepted" }` — `accepted` / `rejected` / `done`
 
@@ -309,7 +336,7 @@
 
 ## 4. 인증 및 역할별 관리 API
 
-`Authorization: Bearer <token>` 세션 토큰을 사용한다. 원문 토큰은 클라이언트에만 전달하며 DB에는 SHA-256 해시와 만료 시각을 저장한다. 세션은 14일간 유효하다.
+`Authorization: Bearer <token>` 세션 토큰을 사용한다. 원문 토큰은 클라이언트에만 전달하며 DB에는 SHA-256 해시와 만료 시각을 저장한다. 세션은 기본 90일간 유효하다(`CALAR_SESSION_DAYS`, 1~365). 만료된 세션은 로그인할 때 정리한다.
 
 | 메서드 | 주소 | 권한 | 기능 |
 |---|---|---|---|
@@ -320,6 +347,13 @@
 | `PUT` | `/api/auth/business` | 점주 | 사업자 정보 수정 후 재검토 요청 |
 | `POST` | `/api/auth/logout` | 로그인 | 현재 세션 삭제 |
 | `GET` | `/api/auth/orders` | 로그인 | 내 주문 내역 |
+| `POST` | `/api/auth/phone/send-code`, `/api/auth/phone/check-code` | 공개 | 문자 인증번호 발송·확인 → 고객 자동 가입·로그인 |
+| `POST` | `/api/auth/request-email-verification`, `/api/auth/verify-email` | 공개 | 이메일 인증 메일 발송·완료 |
+| `POST` | `/api/auth/forgot-password`, `/api/auth/recover-password` | 공개 | 비밀번호 복구 메일 발송·재설정 |
+| `POST` | `/api/auth/reset-password` | 공개(현재 비밀번호 확인) | 비밀번호 변경 |
+| `GET` / `POST` | `/api/auth/wallet`, `/api/auth/wallet/dev-topup` | 로그인 | 크레딧 잔액·내역, 개발용 충전(운영에서는 차단) |
+| `POST` | `/api/payments/kakaopay/ready`, `/api/payments/kakaopay/approve` | 로그인 | 카카오페이로 크레딧 충전 |
+| `GET` / `POST` | `/api/orders/mine`, `/api/orders/:id/rating` | 로그인 | 내 주문과 평점, 완료된 내 주문에 평점 남기기(1회) |
 | `GET/POST/PATCH/DELETE` | `/api/owner/stores...` | 승인된 점주 | 본인 가게·메뉴·쿠폰 CRUD |
 | `GET/PATCH` | `/api/owner/stores/:id/orders`, `/api/owner/orders/:id/status` | 해당 가게 점주 | 주문 조회 및 상태 변경 |
 | `GET/PATCH/DELETE` | `/api/admin/users...` | 관리자 | 사용자 조회·수정·삭제 |
@@ -328,15 +362,25 @@
 
 점주 가입 시 사업자번호 체크섬을 검사하고 사업자명·대표자·사업장 주소를 저장한다. 체크섬은 번호 형식 검사이며 국세청 등록 사실을 증명하지 않는다. 관리자가 확인해 `verified`로 승인한 뒤 점주 가게 관리 API를 사용할 수 있다. 가게 생성 폼은 사업장 주소를 기본값으로 사용하고 주소를 지도 검색 링크로 연결한다.
 
-신규 주문은 로그인한 고객 계정에 연결된다. 주문 조회는 주문자·해당 점주·관리자로 제한한다. 주문 이력이 있는 가게나 메뉴의 삭제는 `409`로 거부한다.
+신규 주문은 로그인한 고객 계정에 연결된다. 주문 조회는 주문자·해당 점주·관리자로 제한한다. 가게·메뉴·쿠폰·사용자 삭제는 `deleted_at`을 기록하는 소프트 삭제이며, 기존 주문 기록은 보존된다.
+
+**요청 제한 (IP별, 15분)** ➕
+
+| 대상 | 한도 | 비고 |
+|---|---|---|
+| 문자 인증번호 발송 | 30회 | 같은 번호 재발송은 60초 간격 제한이 별도로 있음 |
+| 문자 인증번호 확인 | 틀린 시도 20회 | 성공한 로그인은 세지 않음 (같은 와이파이의 여러 고객이 막히지 않도록). 요청 1건당 5회 제한이 별도로 있음 |
+| 이메일 인증·비밀번호 복구 | 10회 | 4개 주소 합산 |
+
+**관리자 계정**: 서버 시작 시 `CALAR_ADMIN_EMAIL`/`CALAR_ADMIN_PASSWORD`로 계정이 없을 때만 생성함. 같은 이메일의 일반 계정이 이미 있으면 자동 승격하지 않음(서버 콘솔의 `npm run admin:provision`으로만 승격, 비밀번호 재설정 포함). 관리자는 자기 계정의 관리자 권한을 해제하거나 정지할 수 없음.
+
+**쿠폰**: `discountRate`는 0~100 숫자 또는 생략/`null`(금액 할인 등). `validFrom`/`validUntil`(`YYYY-MM-DD`)이 있으면 그 기간에만 고객 화면(`Store.coupon`)에 노출함. 업종 이름이 중복되면 `409 Category already exists`.
 
 ---
 
-## 5. 중요 변경 이력
+## 5. 변경 이력 테이블 (제거됨)
 
-`importantDetailsUpdate`는 사용자 프로필, 사업자 승인/정보, 가게, 메뉴, 쿠폰, 업종, 주문 상태 등 주요 변경을 필드별로 기록한다. 생성은 이전 값이 `NULL`, 삭제는 변경 후 값이 `NULL`이며, 변경 전/후가 같은 필드는 기록하지 않는다. 원본 변경과 로그 INSERT는 같은 SQLite 트랜잭션으로 처리한다.
-
-비밀번호 해시, 세션 토큰, 사업자등록번호, 고객 주문 연락처는 로그에 복사하지 않는다. 프로필 연락처·주소 등 일반 변경 필드는 이력에 남는다. `updated_record_id`는 해당 테이블의 내부 숫자 키이며, 감사 로그 자체에도 UUID가 부여된다.
+이전 버전의 `importantDetailsUpdate`(필드별 변경 이력) 테이블은 현재 사용하지 않는다. 서버 시작 시 `db.js`가 테이블을 삭제하며, 자동 테스트도 테이블이 없는 것을 확인한다. 삭제 기록은 각 테이블의 `deleted_at`(소프트 삭제)으로 남는다.
 
 ---
 
@@ -348,6 +392,9 @@
 | JSON 문법이 깨진 body | 400 | `Invalid JSON body` |
 | JSON body 100KB 초과 | 413 | `Request body too large` |
 | 주소의 `%` 인코딩이 깨짐 | 400 | (Express 기본 메시지) |
+| 로그인이 필요한 주소에 토큰 없음·만료 | 401 | `Authentication required` |
+| 권한 없음 (예: 고객이 점주·관리자 주소 호출) | 403 | `Insufficient permissions` |
+| 요청 제한 초과 (4장) | 429 | `Too many recovery attempts` |
 | 예상 못 한 서버 오류 | 500 | `Internal server error` |
 
 - CORS: 모든 출처 허용 (`Access-Control-Allow-Origin: *`)
