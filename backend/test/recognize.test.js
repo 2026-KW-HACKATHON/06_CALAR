@@ -122,6 +122,27 @@ test('실제 OCR: 간판 사진 인식 (png/jpg/webp, 기울기, 노란 바탕)'
   }
 });
 
+test('실제 OCR: 휴대폰 사진 조건 (EXIF 회전, 흐림·잡음·저화질, 색만 다른 간판)', async () => {
+  // 가게 간판 3장은 image-proc 없이 원본만 읽던 예전 방식으로는 매칭하지 못했던 사진,
+  // 마지막 장은 예전 방식으로 24초 걸리던 사진 (image-proc/examples/make_hard_fixtures.rs 로 만든 합성 사진,
+  // 측정 결과는 image-proc/README.md)
+  const fs = require('fs');
+  const path = require('path');
+  const dir = path.join(__dirname, 'fixtures', 'signs-hard');
+  const expected = {
+    '2_laundry__exif.jpg': [2], // 눕혀 저장 + 리틀엔디언 EXIF 회전 정보
+    '3_salon__blur.jpg': [3], // 흔들림 + 잡음 + JPEG 저화질
+    '1_kalguksu__isolum.png': [1], // 글자와 바탕 밝기가 같고 색만 다름
+    'x_starbucks__blur.jpg': [], // 망가진 사진이어도 다른 가게 간판은 매칭 안 됨
+  };
+  for (const [file, ids] of Object.entries(expected)) {
+    const type = file.endsWith('.png') ? 'image/png' : 'image/jpeg';
+    const res = await recognize(imageForm(fs.readFileSync(path.join(dir, file)), { type, filename: file }));
+    assert.equal(res.status, 200, file);
+    assert.deepEqual(res.body.stores.map((s) => s.id), ids, file);
+  }
+});
+
 test('실제 OCR: 내용이 깨진 이미지 → 400, 서버와 OCR은 계속 동작', async () => {
   await expectError(recognize(imageForm(corruptPng())), 400, 'Invalid image file');
   await expectError(recognize(imageForm(corruptPng(), { type: 'application/octet-stream' })), 400, 'Invalid image file');

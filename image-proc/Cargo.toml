@@ -1,0 +1,21 @@
+[package]
+name = "calar-imgproc"
+version = "0.1.0"
+edition = "2021"
+description = "CALAR 간판 사진 전처리 (OCR 전 단계). WebAssembly로 빌드해 백엔드 OCR 프로세스에서 사용한다."
+publish = false
+
+[lib]
+# cdylib: WebAssembly(.wasm) 빌드용, rlib: cargo test / examples 용
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# 순수 Rust 디코더만 사용 (멀티스레드 rayon 제외) → wasm32-unknown-unknown 으로 그대로 빌드됨
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
