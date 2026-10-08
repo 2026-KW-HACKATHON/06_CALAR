@@ -50,9 +50,11 @@
 | `orderType` | `"preorder"` / `"reservation"` / `"none"` | 이 가게가 미리주문을 받는지, 예약만 받는지, 둘 다 안 받는지 |
 | `signKeywords` | 문자열 배열 | 간판 인식할 때 매칭에 쓰이는 키워드들 |
 | `menu` | 메뉴 배열 | 아래 1-2 참고 |
-| `coupon` | `{ title, discountRate }` 또는 `null` | 쿠폰이 없으면 값 자체가 `null`로 옵니다 (빈 객체 `{}` 아님 주의!) |
+| `coupon` | `{ title, discountRate }` 또는 `null` | 지금 쓸 수 있는 쿠폰 1개. 쓸 수 있는 쿠폰이 없으면 값 자체가 `null`로 옵니다 (빈 객체 `{}` 아님 주의!) |
 | `visits` | number | 조회수/방문수. 추천 목록 정렬에 쓰일 예정 |
-| `createdAt` | string | 가게 등록일 (`YYYY-MM-DD` 형식) |
+| `createdAt` | string | 가게 등록일 (`YYYY-MM-DD` 형식, 한국 시간 기준) |
+
+> 🎟️ **쿠폰 고르는 규칙**: DB에는 가게마다 쿠폰이 여러 개 있을 수 있습니다. 백엔드는 `is_active = 1`이고 지금 시각이 `valid_from` ~ `valid_until` 사이인(비어 있으면 제한 없음) 쿠폰 중에서 **할인율(`discountRate`)이 가장 큰 것** 1개를 고릅니다. 할인율이 같으면 먼저 만든 쿠폰(`coupon_id`가 작은 것)을 고릅니다.
 
 > 💡 **`null`과 빈 값의 차이**: `coupon`이 없는 가게는 `"coupon": null` 로 옵니다. 프론트에서는 `if (store.coupon)` 처럼 체크하고 쿠폰 카드를 보여줄지 말지 결정하면 됩니다.
 
@@ -93,10 +95,10 @@
 | `storeId` | number | 어느 가게에 낸 주문인지 (Store의 `id`와 연결) |
 | `items` | 배열 | 주문한 메뉴 목록. `menuId`로 어떤 메뉴인지, `quantity`로 몇 개인지 표시 |
 | `totalPrice` | number | 총 결제 금액 |
-| `pickupTime` | string | 픽업/예약 시간 (`YYYY-MM-DDTHH:mm` 형식, ISO 8601이라고 부름) |
+| `pickupTime` | string | 픽업/예약 시간 (`YYYY-MM-DDTHH:mm` 형식, ISO 8601이라고 부름. 한국 시간 기준) |
 | `customerPhone` | string | 주문한 고객 연락처 |
 | `status` | string | 아래 표 참고 |
-| `createdAt` | string | 주문 생성 시각 |
+| `createdAt` | string | 주문 생성 시각 (`YYYY-MM-DDTHH:mm`, 한국 시간 기준. DB에는 UTC로 저장되지만 백엔드가 변환해서 내려줍니다) |
 
 **`status` 값의 흐름**
 
@@ -115,11 +117,42 @@ pending (대기중)
 | `rejected` | 점주가 거절함 | 점주 |
 | `done` | 픽업/이용 완료 | 점주 (또는 시스템) |
 
+**허용되는 상태 변경은 아래 3가지뿐입니다.** 그 외의 변경(예: `pending → done`, `accepted → rejected`, `done`/`rejected`에서 다른 값으로)은 전부 에러입니다.
+
+| 지금 상태 | 바꿀 수 있는 상태 |
+|---|---|
+| `pending` | `accepted`, `rejected` |
+| `accepted` | `done` |
+| `done`, `rejected` | 없음 (최종 상태) |
+
 > 💡 거절 이유(`rejectionReason`)는 아직 확정 안 해서 이번 필드에서 뺐습니다. 나중에 필요해지면 `status`를 `rejected`로 바꿀 때 같이 보내는 선택 항목(optional)으로 추가할 예정입니다.
 
 ---
 
 ## 2. API 엔드포인트
+
+### 인증 (로그인 토큰)
+
+주문과 관련된 API는 로그인한 사람만 쓸 수 있습니다. 로그인하면 받는 토큰을 요청 헤더에 넣어서 보냅니다.
+
+```
+Authorization: Bearer <토큰>
+```
+
+| API | 누가 쓸 수 있나 |
+|---|---|
+| 2-5 주문 생성 | 로그인한 고객 (비회원 세션 포함) |
+| 2-6 주문 상태 조회 | 그 주문을 만든 고객 본인 |
+| 2-7 가게별 주문 목록, 2-8 주문 상태 변경 | 그 가게의 점주 본인 (`stores.owner_id`와 로그인한 사용자 id가 같아야 함) |
+
+| 상황 | 상태 코드 | 예시 |
+|---|---|---|
+| 토큰이 없거나 만료됨 | `401` | `{ "error": "Authentication required" }` |
+| 로그인은 했지만 내 주문/내 가게가 아님 | `403` | `{ "error": "Forbidden" }` |
+
+> ⚠️ 주문 번호는 1, 2, 3 … 순서대로 매겨지기 때문에, 이 확인이 없으면 누구나 번호를 바꿔 가며 다른 사람의 주문(전화번호 포함)을 보거나 바꿀 수 있습니다. 백엔드는 2-6 ~ 2-8에서 반드시 본인 확인을 해야 합니다.
+
+> 💡 **라우트 등록 순서 주의 (백엔드)**: `/api/stores/recommendations`, `/api/stores/recognize`처럼 고정된 경로는 **`/api/stores/:id`보다 먼저** 등록해야 합니다. 순서가 반대면 `recommendations`를 가게 id로 읽어서 `404 Store not found`가 납니다.
 
 ### 2-1. 가게 목록 조회
 
@@ -133,7 +166,7 @@ GET /api/stores
 
 | 파라미터 | 타입 | 설명 | 예시 |
 |---|---|---|---|
-| `category` | string | 업종으로 필터링 | `음식점` |
+| `category` | string | 업종으로 필터링. 하위 카테고리에 속한 가게도 포함 (예: `한식` → 국밥, 돼지국밥 가게도 나옴) | `음식점` |
 | `keyword` | string | 이름/키워드로 검색 | `칼국수` |
 | `lat`, `lng` | number | 현재 위치 기준 거리순 정렬용 좌표 | `37.62`, `127.06` |
 
@@ -331,6 +364,7 @@ POST /api/orders
 
 | 상황 | 상태 코드 | 예시 |
 |---|---|---|
+| 토큰 없음 | `401` | `{ "error": "Authentication required" }` |
 | 필수 필드 누락 | `400` | `{ "error": "customerPhone is required" }` |
 | 존재하지 않는 `storeId` | `404` | `{ "error": "Store not found" }` |
 | 존재하지 않는 `menuId` | `400` | `{ "error": "Invalid menuId: 999" }` |
@@ -365,6 +399,8 @@ GET /api/orders/1
 
 | 상황 | 상태 코드 | 예시 |
 |---|---|---|
+| 토큰 없음 | `401` | `{ "error": "Authentication required" }` |
+| 다른 사람의 주문 | `403` | `{ "error": "Forbidden" }` |
 | 해당 `id`의 주문이 없음 | `404` | `{ "error": "Order not found" }` |
 
 ---
@@ -401,6 +437,8 @@ GET /api/stores/1/orders?status=pending
 
 | 상황 | 상태 코드 | 예시 |
 |---|---|---|
+| 토큰 없음 | `401` | `{ "error": "Authentication required" }` |
+| 내 가게가 아님 | `403` | `{ "error": "Forbidden" }` |
 | 해당 `id`의 가게가 없음 | `404` | `{ "error": "Store not found" }` |
 | `status` 값이 허용 목록에 없는 값 | `400` | `{ "error": "Invalid status value" }` |
 
@@ -418,7 +456,7 @@ PATCH /api/orders/:id/status
 
 | 필드 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `status` | string | ✅ | `accepted` / `rejected` / `done` 중 하나만 가능 (`pending`으로 되돌리는 건 불가) |
+| `status` | string | ✅ | `accepted` / `rejected` / `done` 중 하나. 1-3의 허용되는 상태 변경 표를 따라야 함 (`pending`은 수락/거절만, `accepted`는 완료만 가능) |
 
 **요청 예시 — 수락**
 ```json
@@ -450,8 +488,11 @@ PATCH /api/orders/:id/status
 
 | 상황 | 상태 코드 | 예시 |
 |---|---|---|
+| 토큰 없음 | `401` | `{ "error": "Authentication required" }` |
+| 내 가게의 주문이 아님 | `403` | `{ "error": "Forbidden" }` |
 | 해당 `id`의 주문이 없음 | `404` | `{ "error": "Order not found" }` |
 | 허용 안 되는 `status` 값 (예: `pending`으로 되돌리기 시도) | `400` | `{ "error": "Cannot change status to pending" }` |
+| 지금 상태에서 갈 수 없는 상태로 변경 (예: `pending → done`, `accepted → rejected`) | `409` | `{ "error": "Cannot change status from pending to done" }` |
 | 이미 `done`/`rejected`된 주문을 또 바꾸려는 시도 | `409` | `{ "error": "Order status cannot be changed anymore" }` |
 
 ---
@@ -461,9 +502,9 @@ PATCH /api/orders/:id/status
 | 기능 | 메서드 | 주소 | 사용하는 화면 |
 |---|---|---|---|
 | 가게 목록 조회 | `GET` | `/api/stores` | Home |
-| 가게 상세 조회 | `GET` | `/api/stores/:id` | StoreDetail |
 | 간판 인식 | `POST` | `/api/stores/recognize` | Camera |
 | 동네 추천 목록 | `GET` | `/api/stores/recommendations` | Recommendation |
+| 가게 상세 조회 | `GET` | `/api/stores/:id` | StoreDetail |
 | 주문/예약 생성 | `POST` | `/api/orders` | Order (고객) |
 | 주문 상태 조회 | `GET` | `/api/orders/:id` | Order (고객) |
 | 가게별 주문 목록 조회 | `GET` | `/api/stores/:id/orders` | OwnerHome |
@@ -486,13 +527,17 @@ PATCH /api/orders/:id/status
 
 ```javascript
 // 가게 상세 조회 예시
-const res = await fetch(`/api/stores/${storeId}`);
-const store = await res.json();
+const storeRes = await fetch(`/api/stores/${storeId}`);
+const store = await storeRes.json();
+if (!storeRes.ok) throw new Error(store.error); // 404 등 에러면 { error: ... }가 옴
 
-// 주문 생성 예시
-const res = await fetch('/api/orders', {
+// 주문 생성 예시 (로그인 토큰 필요)
+const orderRes = await fetch('/api/orders', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  },
   body: JSON.stringify({
     storeId: 1,
     items: [{ menuId: 101, quantity: 2 }],
@@ -500,5 +545,6 @@ const res = await fetch('/api/orders', {
     customerPhone: '010-0000-0000',
   }),
 });
-const order = await res.json();
+const order = await orderRes.json();
+if (!orderRes.ok) throw new Error(order.error);
 ```
