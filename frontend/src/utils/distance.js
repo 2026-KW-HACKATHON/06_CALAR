@@ -1,7 +1,7 @@
 // 두 좌표 사이 거리 계산 (하버사인 공식, 단위: km)
 // 추천 카드에서 "몇 m 거리" 표시할 때 사용
 export const getDistanceKm = (from, to) => {
-  if (!from?.latitude || !to?.lat) return null;
+  if (![from?.latitude, from?.longitude, to?.lat, to?.lng].every(Number.isFinite)) return null;
 
   const R = 6371; // 지구 반지름 (km)
   const dLat = ((to.lat - from.latitude) * Math.PI) / 180;

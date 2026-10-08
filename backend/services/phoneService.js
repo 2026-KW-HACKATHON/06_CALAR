@@ -14,6 +14,7 @@ function normalizePhone(value) {
 function hashCode(code, requestId) { return scryptSync(code, requestId, 32).toString('hex'); }
 
 async function sendCode(body) {
+  if (body?.appHash !== undefined && (typeof body.appHash !== 'string' || !/^[A-Za-z0-9+/]{11}$/.test(body.appHash))) throw new HttpError(400, 'Invalid app hash');
   const phone = normalizePhone(body?.phone);
   sms.configuration();
   const uuid = randomUUID();
@@ -26,7 +27,7 @@ async function sendCode(body) {
       .run(uuid, phone, hash, new Date(Date.now() + 10 * 60 * 1000).toISOString());
   });
   try {
-    const result = await sms.sendCode(phone, code);
+    const result = await sms.sendCode(phone, code, body.appHash, body.client === 'ios');
     transaction(() => {
       db.prepare("UPDATE phone_verification_requests SET used_at = datetime('now') WHERE phone = ? AND used_at IS NULL").run(phone);
       db.prepare('UPDATE phone_verification_requests SET used_at = NULL WHERE uuid = ?').run(uuid);

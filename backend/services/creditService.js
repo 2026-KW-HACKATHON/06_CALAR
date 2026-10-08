@@ -18,7 +18,9 @@ function change(userId, amount, kind, reference) {
     if (existing.amount !== amount) throw new HttpError(409, 'Credit reference already used');
     return;
   }
-  const result = db.prepare(`UPDATE users SET credit = credit + ? WHERE user_id = ? ${kind === 'refund' ? '' : 'AND deleted_at IS NULL AND is_active = 1'} AND credit + ? >= 0 AND credit + ? <= 9007199254740991`)
+  const role = db.prepare('SELECT role FROM users WHERE user_id = ?').get(userId)?.role;
+  if (!role) throw new HttpError(404, 'User not found');
+  const result = db.prepare(`UPDATE ${role}_users SET credit = credit + ? WHERE user_id = ? ${kind === 'refund' ? '' : 'AND deleted_at IS NULL AND is_active = 1'} AND credit + ? >= 0 AND credit + ? <= 9007199254740991`)
     .run(amount, userId, amount, amount);
   if (!result.changes) throw new HttpError(400, 'Insufficient credit');
   const after = db.prepare('SELECT credit FROM users WHERE user_id = ?').get(userId).credit;

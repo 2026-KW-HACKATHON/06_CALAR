@@ -17,6 +17,7 @@ export default function OwnerRegister() {
   const [form, setForm] = useState(INITIAL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [locationConsent, setLocationConsent] = useState(false);
   const submit = async (event) => {
     event.preventDefault();
     if (busy) return;
@@ -25,6 +26,7 @@ export default function OwnerRegister() {
     try {
       await api.post('/api/auth/register', {
         email: form.email.trim(), password: form.password, displayName: form.displayName.trim(), role: 'owner',
+        locationConsent,
         business: {
           businessNumber: form.businessNumber, legalName: form.legalName.trim(),
           representativeName: form.representativeName.trim(), address: form.address.trim(),
@@ -59,6 +61,7 @@ export default function OwnerRegister() {
         {field('address', '사업장 주소', { autoComplete: 'street-address', maxLength: 240 })}
       </fieldset>
       {error && <p className="owner-login__error" role="alert">{error}</p>}
+      <label className="consent-choice"><input type="checkbox" checked={locationConsent} disabled={busy} onChange={(event) => setLocationConsent(event.target.checked)} /><span>위치정보 이용 동의 (선택)</span></label><p>주변 가게 탐색에 사용합니다. 동의하지 않아도 가입할 수 있으며, 기기 위치 권한은 별도로 요청합니다.</p>
       <BigButton type="submit" loading={busy} loadingLabel="가입 중…">회원가입</BigButton>
       <p className="auth-link">이미 계정이 있으신가요? <Link to="/owner/login">로그인</Link></p>
     </form></main>

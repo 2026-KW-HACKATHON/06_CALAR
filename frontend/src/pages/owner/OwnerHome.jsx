@@ -10,6 +10,8 @@ import { getOwnerOrderList, respondToOrder } from '../../services/orderService';
 import { getStoreDetail } from '../../services/storeService';
 import { OWNER_TOAST } from '../../constants/orderStatus';
 import useFetch from '../../hooks/useFetch';
+import StoreLeadTimeSettings from '../../components/owner/StoreLeadTimeSettings';
+import { ROUTES } from '../../constants/routes';
 
 const FILTERS = [
   ['pending', '대기중만', 'schedule'],
@@ -61,10 +63,12 @@ const OwnerHome = () => {
 
   return (
     <div className="screen screen--owner">
-      <Header title={storeName ? `${storeName} - 들어온 요청` : '들어온 요청'} showRoleSwitch />
+      <Header title={storeName ? `${storeName} - 들어온 요청` : '들어온 요청'} showBackButton onBack={() => navigate(ROUTES.ownerSelect)} showRoleSwitch />
 
       <div className="owner-top">
-        <BigButton variant="secondary" icon="menu_book" className="owner-menu-link" onClick={() => navigate(`/owner/${storeId}/menus`)}>메뉴·서비스 관리</BigButton>
+        {storeFetch.status === 'ready' && <StoreLeadTimeSettings store={storeFetch.data} onSaved={storeFetch.refresh} />}
+        <BigButton variant="secondary" icon="menu_book" className="owner-menu-link" onClick={() => navigate(`/owner/${storeId}/menus`)}>메뉴·사진·동영상 관리</BigButton>
+        <BigButton variant="secondary" icon="local_offer" onClick={() => navigate(`/owner/${storeId}/coupons`)}>쿠폰 관리</BigButton>
         <div role="tablist" aria-label="요청 보기" className="tabs tabs--two">
           {FILTERS.map(([key, label, icon]) => (
             <button

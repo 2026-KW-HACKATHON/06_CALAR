@@ -68,6 +68,9 @@ export const pickupRange = (now = new Date()) => ({
 
 // 서버 오류 메시지(영어)를 어르신이 읽을 수 있는 한국어로
 export const toKoreanOrderError = (serverMessage) => {
+  const leadTime = /at least (\d+) minutes/.exec(String(serverMessage));
+  if (leadTime) return `이 가게는 최소 ${leadTime[1]}분 전에 신청해야 해요. 시간을 다시 골라주세요.`;
+  if (String(serverMessage).includes('coupon') || String(serverMessage).includes('Coupon')) return '쿠폰을 사용할 수 없어요. 쿠폰 적용을 해제하거나 새로고침해 주세요.';
   const msg = String(serverMessage || '');
   if (msg.includes('Insufficient credit')) return '크레딧이 부족해요. 충전하거나 가게에서 결제를 선택해 주세요.';
   if (msg.includes('Authentication required') || msg.includes('Invalid or expired session')) return '로그인이 필요하거나 로그인 시간이 만료됐어요. 다시 로그인한 뒤 주문해 주세요.';
@@ -79,5 +82,8 @@ export const toKoreanOrderError = (serverMessage) => {
   if (msg.includes('within') && msg.includes('days')) return '30일 안의 날짜만 고를 수 있어요.';
   if (msg.includes('customerPhone')) return '전화번호를 다시 확인해 주세요.';
   if (msg.includes('does not accept orders')) return '이 가게는 지금 주문을 받지 않아요.';
+  if (msg.includes('does not accept visit reservations')) return '이 가게는 방문 예약을 받지 않아요.';
+  if (msg.includes('items must be')) return '주문할 메뉴를 1개 이상 골라주세요.';
+  if (msg.includes('partySize')) return '예약 인원은 1~99명으로 선택해 주세요.';
   return '주문에 실패했어요. 다시 시도해주세요.';
 };

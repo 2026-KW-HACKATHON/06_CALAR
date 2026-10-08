@@ -20,7 +20,6 @@ const MAX_QUANTITY = 99; // 메뉴 하나당 최대 수량
 const MAX_PICKUP_DAYS = 30; // 픽업/예약은 최대 30일 뒤까지
 
 // 휴대폰(010-1234-5678), 서울(02-123-4567), 지역번호(031-123-4567), 하이픈 없는 형식 허용
-const PHONE_PATTERN = /^0\d{1,2}-?\d{3,4}-?\d{4}$/;
 
 // items 검사 + 같은 메뉴는 하나로 합침 → { orderItems, totalPrice }
 function buildOrderItems(store, items) {
@@ -75,6 +74,9 @@ function validatePickupTime(store, pickupTime) {
   }
 
   const now = Date.now();
+  if (parsed.epochMs < now + (store.minOrderMinutes ?? 0) * 60000 && store.minOrderMinutes > 0) {
+    throw new HttpError(400, `pickupTime must be at least ${store.minOrderMinutes} minutes from now`);
+  }
   if (parsed.epochMs + 60 * 1000 <= now) {
     throw new HttpError(400, 'pickupTime must not be in the past'); // 지금 이 분(minute)까지는 허용
   }
@@ -92,8 +94,15 @@ function createOrder(body, { customerId } = {}) {
     throw new HttpError(400, 'Request body must be a JSON object');
   }
 
-  const { storeId, items, pickupTime, customerPhone } = body;
+  const { storeId, items, pickupTime } = body;
+  const reservation = body.kind === 'reservation';
+  if (body.kind !== undefined && !['reservation', 'preorder'].includes(body.kind)) throw new HttpError(400, 'Invalid order kind');
+  if (reservation && (!Number.isInteger(body.partySize) || body.partySize < 1 || body.partySize > 99)) throw new HttpError(400, 'Invalid partySize');
+  const customerPhone = typeof body.customerPhone === 'string' ? body.customerPhone : '';
+  const couponUuid = body.couponUuid ?? null;
+  if (couponUuid !== null && (typeof couponUuid !== 'string' || !/^[0-9a-f-]{36}$/i.test(couponUuid))) throw new HttpError(400, 'Invalid coupon');
   const paymentMethod = body.paymentMethod ?? 'onsite';
+  if (reservation && (paymentMethod !== 'onsite' || couponUuid !== null)) throw new HttpError(400, 'Visit reservations do not require payment or a coupon');
   if (!['onsite', 'credit'].includes(paymentMethod)) throw new HttpError(400, 'Invalid paymentMethod');
   if (paymentMethod === 'credit' && (!customerId || typeof body.requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.requestId))) throw new HttpError(400, 'Credit payment requires a requestId and login');
   if (paymentMethod === 'credit') {
@@ -101,12 +110,12 @@ function createOrder(body, { customerId } = {}) {
     if (previous) {
       const existing = getOrderById(previous.order_id);
       const requested = mergedItemsKey(items);
-      if (requested === null || existing.storeId !== storeId || existing.pickupTime !== pickupTime || existing.customerPhone !== customerPhone || mergedItemsKey(existing.items) !== requested) throw new HttpError(409, 'Payment request already used for another order');
+      if (requested === null || existing.storeId !== storeId || existing.pickupTime !== pickupTime || existing.customerPhone !== customerPhone || (existing.couponUuid ?? null) !== couponUuid || mergedItemsKey(existing.items) !== requested) throw new HttpError(409, 'Payment request already used for another order');
       return existing;
     }
   }
 
-  for (const field of ['storeId', 'items', 'pickupTime', 'customerPhone']) {
+  for (const field of ['storeId', 'items', 'pickupTime']) {
     if (body[field] === undefined || body[field] === null || body[field] === '') {
       throw new HttpError(400, `${field} is required`);
     }
@@ -123,23 +132,29 @@ function createOrder(body, { customerId } = {}) {
   if (store.orderType === 'none') {
     throw new HttpError(400, 'This store does not accept orders');
   }
+  if (reservation && store.orderType !== 'reservation') throw new HttpError(400, 'This store does not accept visit reservations');
+  if (reservation && (!Array.isArray(items) || items.length !== 0)) throw new HttpError(400, 'Visit reservations must not include menu items');
 
   // totalPrice는 프론트 값이 아니라 가게 메뉴 가격으로 서버가 직접 계산
-  const { orderItems, totalPrice } = buildOrderItems(store, items);
+  const { orderItems, totalPrice: subtotal } = reservation ? { orderItems: [], totalPrice: 0 } : buildOrderItems(store, items);
   validatePickupTime(store, pickupTime);
 
-  if (typeof customerPhone !== 'string' || !PHONE_PATTERN.test(customerPhone)) {
-    throw new HttpError(400, 'Invalid customerPhone format');
-  }
+
 
   const createdAt = nowKSTString();
   let orderId;
   db.exec('BEGIN');
   try {
+    const coupon = couponUuid ? require('./couponService').available(storeId, couponUuid) : null;
+    if (couponUuid && !coupon) throw new HttpError(400, 'Coupon is not available');
+    const eligibleSubtotal = coupon ? orderItems.filter(item => coupon.targetMenuId === 0 || item.menuId === coupon.targetMenuId).reduce((sum, item) => sum + store.menu.find(menu => menu.id === item.menuId).price * item.quantity, 0) : 0;
+    if (coupon && eligibleSubtotal === 0) throw new HttpError(400, 'Coupon target menu is not in this order');
+    const discountAmount = coupon ? Math.floor(eligibleSubtotal * coupon.discountRate / 100) : 0;
+    const totalPrice = subtotal - discountAmount;
     const result = db.prepare(`
-      INSERT INTO orders (uuid, customer_id, store_id, total_price, pickup_time, customer_phone, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).run(randomUUID(), customerId ?? null, storeId, totalPrice, pickupTime, customerPhone, createdAt);
+      INSERT INTO orders (uuid, customer_id, store_id, total_price, pickup_time, customer_phone, status, created_at, coupon_uuid, discount_amount, party_size)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+    `).run(randomUUID(), customerId ?? null, storeId, totalPrice, pickupTime, customerPhone, createdAt, couponUuid, discountAmount, reservation ? body.partySize : null);
     orderId = Number(result.lastInsertRowid);
     if (paymentMethod === 'credit') {
       db.prepare("UPDATE orders SET payment_method = 'credit', payment_reference = ? WHERE order_id = ?").run(body.requestId, orderId);
@@ -165,13 +180,13 @@ function getOrderById(id) {
   const row = db.prepare(`
     SELECT order_id AS id, uuid, store_id AS storeId, total_price AS totalPrice,
       pickup_time AS pickupTime, customer_phone AS customerPhone, status,
-      created_at AS createdAt, payment_method, customer_id
+      created_at AS createdAt, payment_method, customer_id, coupon_uuid, discount_amount, party_size
     FROM orders WHERE order_id = ?
   `).get(id);
   if (!row) return null;
   const items = db.prepare('SELECT menu_id AS menuId, uuid, quantity FROM items WHERE order_id = ? ORDER BY item_id').all(id);
-  const { payment_method, customer_id, ...publicOrder } = row;
-  return { ...publicOrder, items, ...(payment_method === 'credit' ? { paymentMethod: 'credit' } : {}) };
+  const { payment_method, customer_id, coupon_uuid, discount_amount, party_size, ...publicOrder } = row;
+  return { ...publicOrder, items, ...(party_size ? { kind: 'reservation', partySize: party_size } : {}), ...(coupon_uuid ? { couponUuid: coupon_uuid, discountAmount: discount_amount } : {}), ...(payment_method === 'credit' ? { paymentMethod: 'credit' } : {}) };
 }
 
 // 가게로 들어온 주문 목록 (status 필터, 픽업 시간 빠른 순 → 같으면 먼저 들어온 순)

@@ -12,7 +12,13 @@ import { formatPickup, formatCreated, formatWon } from '../../utils/formatDate';
 const OrderStatus = ({ order, store }) => {
   if (!order) return null;
 
-  const info = ORDER_STATUS_MESSAGE[order.status] || ORDER_STATUS_MESSAGE.pending;
+  const reservationMessages = {
+    pending: { headIcon: 'event', headTitle: '예약을 신청했어요', message: '가게에서 예약을 확인하고 있어요.', hint: '점주가 수락하면 예약이 확정돼요.' },
+    accepted: { headIcon: 'event_available', headTitle: '예약이 확정됐어요', message: '', hint: '{pickup}에 맞춰 방문해 주세요.' },
+    rejected: { headIcon: 'block', headTitle: '예약을 받지 못했어요', message: '', hint: '다른 시간으로 예약하거나 가게에 문의해 주세요.' },
+    done: { headIcon: 'check_circle', headTitle: '방문이 완료됐어요', message: '', hint: '이용해 주셔서 고마워요.' },
+  };
+  const info = (order.kind === 'reservation' ? reservationMessages[order.status] : ORDER_STATUS_MESSAGE[order.status]) || ORDER_STATUS_MESSAGE.pending;
   const pickup = formatPickup(order.pickupTime);
   const hint = info.hint.replace('{pickup}', pickup);
 
@@ -38,6 +44,7 @@ const OrderStatus = ({ order, store }) => {
       </div>
 
       <dl className="receipt">
+        {order.partySize && <div className="receipt__row"><dt>예약 인원</dt><dd>{order.partySize}명</dd></div>}
         <div className="receipt__row receipt__row--strong">
           <dt>픽업/예약 시간</dt>
           <dd>{pickup}</dd>

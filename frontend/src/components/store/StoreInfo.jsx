@@ -16,6 +16,7 @@ const StoreInfo = ({ store }) => {
           <OpenBadge status={store.openStatus} large />
         </div>
         <h2 className="store-info__name">{store.name}</h2>
+        {store.isVirtual && <span className="virtual-store-badge">가상·예시 점포</span>}
         {store.ratingCount > 10 && <p>{`★ ${store.rating.toFixed(1)} / 5 · ${store.ratingCount}개의 평점`}</p>}
         {store.description && <p className="store-info__desc">{store.description}</p>}
       </div>

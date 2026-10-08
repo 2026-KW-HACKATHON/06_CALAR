@@ -1,12 +1,17 @@
 import api from './api';
+import { ensureCustomerSession } from './customerSession';
 
 // 주문/예약 생성 (고객)
 // totalPrice는 안 보냄 - 백엔드가 메뉴 가격 기준으로 계산
-export const createOrder = async ({ storeId, items, pickupTime, customerPhone, paymentMethod, requestId }) => {
+export const createOrder = async ({ storeId, items, pickupTime, kind, partySize, couponUuid, customerPhone, paymentMethod, requestId }) => {
+  await ensureCustomerSession();
   const res = await api.post('/api/orders', {
     storeId: Number(storeId),
     items,
     pickupTime,
+    kind,
+    partySize,
+    couponUuid,
     customerPhone,
     paymentMethod,
     requestId,

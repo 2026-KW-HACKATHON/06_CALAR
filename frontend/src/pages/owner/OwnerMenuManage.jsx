@@ -5,6 +5,7 @@ import BigButton from '../../components/common/BigButton';
 import { LoadingBox, MessageBox } from '../../components/common/StateBox';
 import useFetch from '../../hooks/useFetch';
 import api from '../../services/api';
+import PhotoManager from '../../components/owner/PhotoManager';
 import { ROUTES } from '../../constants/routes';
 
 export default function OwnerMenuManage() {
@@ -63,6 +64,9 @@ export default function OwnerMenuManage() {
         actionLabel="다시 시도" onAction={info.reload} actionLoading={info.retrying} />}
       {info.status === 'ready' && <>
         <h2 className="lead">{info.data.store.name}</h2>
+        <PhotoManager portrait storeId={storeId} photos={info.data.store.ownerPhoto ? [info.data.store.ownerPhoto] : []} onSaved={info.refresh} disabled={!info.data.approved} />
+        <PhotoManager storeId={storeId} photos={info.data.store.photos} onSaved={info.refresh} disabled={!info.data.approved} />
+        <PhotoManager video storeId={storeId} photos={info.data.store.videos} onSaved={info.refresh} disabled={!info.data.approved} />
         <p>{service ? '커트·세탁·수선 같은 서비스 항목과 가격을 설정해요.' : '음식·상품 메뉴와 가격을 설정해요.'} 저장하면 고객 화면에 반영돼요.</p>
         {!info.data.approved && <p role="status">사업자 승인 후 등록·수정·삭제할 수 있어요.</p>}
         <form className="stack owner-login menu-editor" onSubmit={submit}>
@@ -83,6 +87,8 @@ export default function OwnerMenuManage() {
         <h3>등록된 {label} {info.data.menus.length}개</h3>
         {info.data.menus.length === 0 && <MessageBox tone="empty" icon="menu_book" title={`등록된 ${label}가 없어요`} body="위에서 이름과 가격을 입력해 첫 항목을 등록해 주세요." />}
         <ul className="stack">{info.data.menus.map((menu) => <li className="menu-manage-card stack" key={menu.id}>
+          <PhotoManager storeId={storeId} menuId={menu.id} photos={menu.photo ? [menu.photo] : []} onSaved={info.refresh} disabled={!info.data.approved} />
+          <PhotoManager video storeId={storeId} menuId={menu.id} photos={menu.video ? [menu.video] : []} onSaved={info.refresh} disabled={!info.data.approved} />
           <div className="menu-manage-card__heading"><strong>{menu.name}</strong><span>{menu.price.toLocaleString('ko-KR')}원</span></div>
           <div className="menu-manage-card__actions">
             <BigButton variant="secondary" size="sm" disabled={busy || !info.data.approved} onClick={() => {

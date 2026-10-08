@@ -16,7 +16,7 @@ app.use(cors()); // 프론트(다른 포트)에서 호출 허용
 app.use(express.json()); // JSON body -> req.body (최대 100kb)
 
 const frontendBuild = path.join(__dirname, '..', 'frontend', 'dist');
-if (fs.existsSync(frontendBuild)) app.use(express.static(frontendBuild, {
+app.use(express.static(frontendBuild, {
     setHeaders(res, filePath) {
         if (filePath.endsWith('index.html')) res.set('Cache-Control', 'no-cache');
     },
@@ -24,11 +24,13 @@ if (fs.existsSync(frontendBuild)) app.use(express.static(frontendBuild, {
 app.get('/health', (req, res) => res.send('06_CALAR 백엔드 서버 동작 중.'));
 
 app.use('/api/stores', storesRouter);
+app.use('/api/photos', require('./routes/photos'));
+app.use('/api/inquiries', require('./routes/inquiries'));
 app.use('/api/orders', ordersRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/owner', ownerRouter);
 app.use('/api/admin', adminRouter);
-app.use('/api/payments', require('./routes/payments'));
+app.use('/api/payments', (req, res) => res.status(410).json({ error: 'Payments are no longer available' }));
 app.get('/mobile/payment-result', (req, res) => {
     const target = new URL('calar://payment-result');
     for (const key of ['paymentId', 'outcome', 'pg_token']) {
@@ -37,8 +39,10 @@ app.get('/mobile/payment-result', (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.redirect(target.toString());
 });
-app.get(['/roles', '/admin', '/reset-password', '/verify-email', '/owner', '/owner/login', '/owner/register', '/owner/stores/new', '/owner/:storeId', '/owner/:storeId/menus', '/owner/:storeId/order/:orderId', '/customer', '/customer/me', '/customer/payment-result', '/customer/wallet', '/customer/orders', '/camera', '/recommendation', '/store/:storeId', '/store/:storeId/order'], (req, res, next) => {
-    if (!fs.existsSync(path.join(frontendBuild, 'index.html'))) return next();
+app.get(['/', '/roles', '/admin', '/reset-password', '/verify-email', '/owner', '/owner/login', '/owner/register', '/owner/stores/new', '/owner/:storeId', '/owner/:storeId/menus', '/owner/:storeId/order/:orderId', '/customer', '/customer/nearby', '/customer/settings', '/customer/favorites', '/customer/coupons', '/customer/me', '/customer/inquiries', '/admin/inquiries', '/customer/payment-result', '/customer/wallet', '/customer/orders', '/camera', '/recommendation', '/store/:storeId', '/store/:storeId/order'], (req, res) => {
+    if (!fs.existsSync(path.join(frontendBuild, 'index.html'))) {
+        return res.status(503).type('text/plain').send('Frontend build missing. Run npm install and npm run start from the project root (06_CALAR), then restart the running server.');
+    }
     res.set('Cache-Control', 'no-cache');
     res.sendFile(path.join(frontendBuild, 'index.html'));
 });

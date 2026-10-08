@@ -73,13 +73,13 @@ function getOwnerDashboard(user) {
 
 function updateProfile(userId, body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Request body must be a JSON object');
-  const user = db.prepare('SELECT display_name, phone, address FROM users WHERE user_id = ? AND deleted_at IS NULL').get(userId);
+  const user = db.prepare('SELECT display_name, phone, address, role FROM users WHERE user_id = ? AND deleted_at IS NULL').get(userId);
   if (!user) throw new HttpError(404, 'User not found');
   const displayName = body.displayName === undefined ? user.display_name : typeof body.displayName === 'string' ? body.displayName.trim() : null;
   const phone = body.phone === undefined ? user.phone : typeof body.phone === 'string' ? body.phone.trim() : null;
   const address = body.address === undefined ? user.address : typeof body.address === 'string' ? body.address.trim() : null;
   if (typeof displayName !== 'string' || !displayName || displayName.length > 80) throw new HttpError(400, 'Invalid displayName');
-  if (phone && !PHONE_PATTERN.test(phone)) throw new HttpError(400, 'Invalid phone');
+  if (user.role !== 'customer' && phone && !PHONE_PATTERN.test(phone)) throw new HttpError(400, 'Invalid phone');
   if (address && (typeof address !== 'string' || address.length > 240)) throw new HttpError(400, 'Invalid address');
   const after = { display_name: displayName, phone: phone || null, address: address || null };
   transaction(() => {
@@ -101,6 +101,10 @@ function categoryIdFrom(value) {
 function normalizedStore(body, current = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Request body must be a JSON object');
   const value = { ...current, ...body };
+  const minOrderMinutes = value.minOrderMinutes ?? 0;
+  const isVirtual = value.isVirtual ?? false;
+  if (typeof isVirtual !== 'boolean') throw new HttpError(400, 'Invalid isVirtual');
+  if (!Number.isInteger(minOrderMinutes) || minOrderMinutes < 0 || minOrderMinutes > 43200) throw new HttpError(400, 'Invalid minOrderMinutes');
   const name = typeof value.name === 'string' ? value.name.trim() : '';
   const address = typeof value.address === 'string' ? value.address.trim() : '';
   const description = value.description == null ? '' : typeof value.description === 'string' ? value.description.trim() : null;
@@ -128,6 +132,8 @@ function normalizedStore(body, current = {}) {
     lng,
     openHours: value.openHours,
     orderType: value.orderType,
+    minOrderMinutes,
+    isVirtual,
   };
 }
 
@@ -154,6 +160,7 @@ function createStore(user, body, admin = false) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(randomUUID(), ownerId, store.name, store.categoryId, store.description, store.phone, store.address,
       store.lat, store.lng, store.openHours, store.orderType);
+    db.prepare('UPDATE stores SET min_order_minutes = ?, is_virtual = ? WHERE store_id = ?').run(store.minOrderMinutes, store.isVirtual ? 1 : 0, Number(result.lastInsertRowid));
     const storeId = Number(result.lastInsertRowid);
     const after = {
       owner_id: ownerId,
@@ -187,6 +194,8 @@ function updateStore(user, storeId, body, admin = false) {
     locationLng: current.location.lng,
     openHours: current.openHours,
     orderType: current.orderType,
+    minOrderMinutes: current.minOrderMinutes,
+    isVirtual: current.isVirtual,
   });
   const ownerId = admin && Object.hasOwn(body, 'ownerId') ? validateOwnerAssignment(body.ownerId) : currentOwner.owner_id;
   return transaction(() => {
@@ -196,6 +205,7 @@ function updateStore(user, storeId, body, admin = false) {
       WHERE store_id = ?
     `).run(ownerId, store.name, store.categoryId, store.description, store.phone, store.address,
       store.lat, store.lng, store.openHours, store.orderType, storeId);
+    db.prepare('UPDATE stores SET min_order_minutes = ?, is_virtual = ? WHERE store_id = ?').run(store.minOrderMinutes, store.isVirtual ? 1 : 0, storeId);
 
     return managementStore(storeId);
   });
@@ -226,7 +236,8 @@ function assertMenuBelongs(storeId, menuId) {
 
 function listMenus(user, storeId) {
   assertStoreAccess(user, storeId);
-  return db.prepare('SELECT menu_id AS id, uuid, name, price FROM menus WHERE store_id = ? AND deleted_at IS NULL ORDER BY menu_id').all(storeId);
+  return db.prepare('SELECT menu_id AS id, uuid, name, price FROM menus WHERE store_id = ? AND deleted_at IS NULL ORDER BY menu_id').all(storeId)
+    .map((menu) => ({ ...menu, photo: require('./photoService').list(storeId, menu.id)[0] ?? null, video: require('./videoService').list(storeId, menu.id)[0] ?? null }));
 }
 
 function createMenu(user, storeId, body) {
@@ -272,13 +283,16 @@ function couponRow(couponId) {
   return db.prepare(`
     SELECT coupon_id AS id, uuid, store_id AS storeId, title, description,
       discount_rate AS discountRate, valid_from AS validFrom, valid_until AS validUntil,
-      is_active AS isActive
+      is_active AS isActive, target_menu_id AS targetMenuId
     FROM coupons WHERE coupon_id = ?
   `).get(couponId);
 }
 
-function normalizedCoupon(body, current = {}) {
+function normalizedCoupon(body, current = {}, storeId) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Request body must be a JSON object');
+  const targetMenuId = body.targetMenuId === undefined ? current.targetMenuId ?? 0 : body.targetMenuId;
+  if (!Number.isSafeInteger(targetMenuId) || targetMenuId < 0) throw new HttpError(400, 'Invalid targetMenuId');
+  if (targetMenuId !== 0 && !db.prepare('SELECT 1 FROM menus WHERE menu_id = ? AND store_id = ? AND deleted_at IS NULL').get(targetMenuId, storeId)) throw new HttpError(400, 'Target menu must belong to this store');
   const title = typeof body?.title === 'string' ? body.title.trim() : current.title;
   const description = body?.description === undefined ? current.description : body.description;
   const discountRate = body?.discountRate === undefined ? current.discountRate : body.discountRate;
@@ -298,7 +312,7 @@ function normalizedCoupon(body, current = {}) {
   }
   if (validFrom && validUntil && validFrom > validUntil) throw new HttpError(400, 'validFrom must not be after validUntil');
   if (![0, 1, false, true].includes(isActive)) throw new HttpError(400, 'Invalid isActive');
-  return { title, description: description || null, discountRate: discountRate ?? null, validFrom: validFrom || null, validUntil: validUntil || null, isActive: Number(isActive) };
+  return { targetMenuId, title, description: description || null, discountRate: discountRate ?? null, validFrom: validFrom || null, validUntil: validUntil || null, isActive: Number(isActive) };
 }
 
 function listCoupons(user, storeId) {
@@ -306,7 +320,7 @@ function listCoupons(user, storeId) {
   return db.prepare(`
     SELECT coupon_id AS id, uuid, store_id AS storeId, title, description,
       discount_rate AS discountRate, valid_from AS validFrom, valid_until AS validUntil,
-      is_active AS isActive
+      is_active AS isActive, target_menu_id AS targetMenuId
     FROM coupons WHERE store_id = ? AND deleted_at IS NULL ORDER BY coupon_id
   `).all(storeId);
 }
@@ -314,12 +328,12 @@ function listCoupons(user, storeId) {
 function createCoupon(user, storeId, body) {
   if (user.role !== 'admin') requireOwnerApproval(user.id);
   assertStoreAccess(user, storeId);
-  const coupon = normalizedCoupon(body);
+  const coupon = normalizedCoupon(body, {}, storeId);
   return transaction(() => {
     const result = db.prepare(`
-      INSERT INTO coupons (uuid, store_id, title, description, discount_rate, valid_from, valid_until, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(randomUUID(), storeId, coupon.title, coupon.description, coupon.discountRate, coupon.validFrom, coupon.validUntil, coupon.isActive);
+      INSERT INTO coupons (uuid, store_id, title, description, discount_rate, valid_from, valid_until, is_active, target_menu_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(randomUUID(), storeId, coupon.title, coupon.description, coupon.discountRate, coupon.validFrom, coupon.validUntil, coupon.isActive, coupon.targetMenuId);
     const couponId = Number(result.lastInsertRowid);
 
     return couponRow(couponId);
@@ -334,7 +348,7 @@ function updateCoupon(user, storeId, couponId, body) {
     FROM coupons WHERE coupon_id = ? AND store_id = ? AND deleted_at IS NULL
   `).get(couponId, storeId);
   if (!current) throw new HttpError(404, 'Coupon not found');
-  const coupon = normalizedCoupon(body, couponRow(couponId));
+  const coupon = normalizedCoupon(body, couponRow(couponId), storeId);
   const after = {
     title: coupon.title,
     description: coupon.description,
@@ -345,9 +359,9 @@ function updateCoupon(user, storeId, couponId, body) {
   };
   return transaction(() => {
     db.prepare(`
-      UPDATE coupons SET title = ?, description = ?, discount_rate = ?, valid_from = ?, valid_until = ?, is_active = ?
+      UPDATE coupons SET title = ?, description = ?, discount_rate = ?, valid_from = ?, valid_until = ?, is_active = ?, target_menu_id = ?
       WHERE coupon_id = ?
-    `).run(coupon.title, coupon.description, coupon.discountRate, coupon.validFrom, coupon.validUntil, coupon.isActive, couponId);
+    `).run(coupon.title, coupon.description, coupon.discountRate, coupon.validFrom, coupon.validUntil, coupon.isActive, coupon.targetMenuId, couponId);
 
     return couponRow(couponId);
   });
@@ -520,6 +534,7 @@ function ownerOrders(user, storeId, status) {
 }
 
 module.exports = {
+  assertStoreAccess,
   assertOrderAccess,
   assertOrderReadAccess,
   createCategory,

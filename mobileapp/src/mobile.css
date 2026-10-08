@@ -1,3 +1,0 @@
-body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
-.screen { padding-top: env(safe-area-inset-top, 0px); }
-input, select, textarea { font-size: max(16px, 1em); }

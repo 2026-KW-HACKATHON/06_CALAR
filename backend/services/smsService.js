@@ -20,7 +20,14 @@ function authorization(config) {
   return `HMAC-SHA256 apiKey=${config.key}, date=${date}, salt=${salt}, signature=${signature}`;
 }
 
-async function sendCode(phone, code) {
+function codeMessage(code, appHash, ios = false) {
+  if (appHash && !/^[A-Za-z0-9+/]{11}$/.test(appHash)) throw new HttpError(400, 'Invalid app hash');
+  if (appHash) return `<#> [CALAR] Code: ${code} (10 min)\n${appHash}`;
+  let domain;
+  try { const url = new URL(process.env.CALAR_PUBLIC_URL); if (!ios && url.protocol === 'https:') domain = url.hostname; } catch { /* Plain SMS works without a public domain. */ }
+  return `[CALAR] Code: ${code} (10 min)${domain ? `\n@${domain} #${code}` : ''}`;
+}
+async function sendCode(phone, code, appHash, ios = false) {
   const config = configuration();
   if (config.mock) return { mock: true };
   let response, data;
@@ -28,7 +35,7 @@ async function sendCode(phone, code) {
     response = await fetch('https://api.solapi.com/messages/v4/send-many/detail', {
       method: 'POST', signal: AbortSignal.timeout(15000),
       headers: { Authorization: authorization(config), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ to: `0${phone.slice(3)}`, from: config.sender, type: 'SMS', text: `[월계] 인증번호 [${code}]를 입력해주세요. 10분간 유효합니다.` }] }),
+      body: JSON.stringify({ messages: [{ to: `0${phone.slice(3)}`, from: config.sender, type: 'SMS', text: codeMessage(code, appHash, ios) }] }),
     });
     data = await response.json();
   } catch { throw new HttpError(503, 'SMS provider unavailable'); }
@@ -40,4 +47,4 @@ async function sendCode(phone, code) {
   return { mock: false };
 }
 
-module.exports = { configuration, authorization, sendCode };
+module.exports = { configuration, authorization, sendCode, codeMessage };

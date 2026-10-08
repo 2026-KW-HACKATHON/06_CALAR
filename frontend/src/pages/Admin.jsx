@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { getToken, saveToken, clearToken } from '../services/session';
 import BigButton from '../components/common/BigButton';
@@ -9,7 +10,7 @@ const SECTIONS = {
   stores: { title: '가게', sample: { name: '', categoryId: 1, address: '', phone: '', description: '', openHours: '09:00-18:00', orderType: 'preorder', ownerId: null } },
   categories: { title: '업종', sample: { name: '' } },
   menus: { title: '메뉴', sample: { name: '', price: 0 }, nested: true },
-  coupons: { title: '쿠폰', sample: { title: '', description: '', discountRate: 10, isActive: true }, nested: true },
+  coupons: { title: '쿠폰', sample: { title: '', description: '', discountRate: 10, targetMenuId: 0, isActive: true }, nested: true },
 };
 
 export default function Admin() {
@@ -111,6 +112,7 @@ export default function Admin() {
     </form>}
     {auth === 'ready' && <>
       {summary && <div className="admin-summary"><span>사용자 {summary.users}</span><span>가게 {summary.stores}</span><span>승인 대기 {summary.pendingBusinesses}</span><span>주문 대기 {summary.pendingOrders}</span></div>}
+      <Link to="/admin/inquiries">고객 문의 채팅</Link>
       <nav className="admin-tabs" aria-label="관리할 데이터">{Object.entries(SECTIONS).map(([key, item]) =>
         <button key={key} disabled={busy} aria-pressed={section === key} onClick={() => { setSection(key); setNotice(''); }}>{item.title}</button>)}</nav>
       <div className="admin-toolbar"><h2>{config.title}</h2>

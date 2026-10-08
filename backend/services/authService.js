@@ -14,6 +14,7 @@ function hashPassword(password, salt = randomBytes(16).toString('hex')) {
 }
 
 function verifyPassword(password, storedHash) {
+  if (typeof storedHash !== 'string') return false;
   const [salt, hash] = storedHash.split(':');
   const actual = scryptSync(password, salt, 64);
   const expected = Buffer.from(hash, 'hex');
@@ -39,6 +40,9 @@ function publicUser(userId) {
     FROM users WHERE user_id = ? AND is_active = 1 AND deleted_at IS NULL
   `).get(userId);
   if (!user) return null;
+  const consent = db.prepare('SELECT accepted, updated_at FROM location_consents WHERE user_id = ?').get(userId);
+  user.locationConsent = consent ? Boolean(consent.accepted) : null;
+  user.locationConsentUpdatedAt = consent?.updated_at ?? null;
   user.phoneVerifiedAt = db.prepare('SELECT verified_at FROM phone_identities WHERE user_id = ?').get(userId)?.verified_at ?? null;
   if (user.role === 'owner') {
     user.business = db.prepare(`
@@ -55,15 +59,16 @@ function register(body) {
   if (!isPlainObject(body)) throw new HttpError(400, 'Request body must be a JSON object');
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = body.password;
-  const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
+  const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : body.role === 'owner' ? '' : '고객';
   const role = body.role ?? 'customer';
-  if (!EMAIL_PATTERN.test(email) || email.length > 254) throw new HttpError(400, 'Invalid email');
-  if (typeof password !== 'string' || password.length < 10 || password.length > 128) {
+  const emailLogin = role === 'owner' || Boolean(email || password);
+  if (emailLogin && (!EMAIL_PATTERN.test(email) || email.length > 254)) throw new HttpError(400, 'Invalid email');
+  if (emailLogin && (typeof password !== 'string' || password.length < 10 || password.length > 128)) {
     throw new HttpError(400, 'Password must be between 10 and 128 characters');
   }
   if (!displayName || displayName.length > 80) throw new HttpError(400, 'displayName is required');
   if (!['customer', 'owner'].includes(role)) throw new HttpError(400, 'Invalid role');
-  if (body.phone !== undefined && body.phone !== '' && (typeof body.phone !== 'string' || !PHONE_PATTERN.test(body.phone))) {
+  if (role !== 'customer' && body.phone !== undefined && body.phone !== '' && (typeof body.phone !== 'string' || !PHONE_PATTERN.test(body.phone))) {
     throw new HttpError(400, 'Invalid phone');
   }
   if (body.address !== undefined && (typeof body.address !== 'string' || body.address.length > 240)) {
@@ -87,11 +92,13 @@ function register(body) {
 
   db.exec('BEGIN');
   try {
+    const uuid = randomUUID();
     const result = db.prepare(`
       INSERT INTO users (uuid, email, password_hash, display_name, phone, address, role)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(randomUUID(), email, hashPassword(password), displayName, body.phone || null, body.address || null, role);
-    const userId = Number(result.lastInsertRowid);
+    `).run(uuid, emailLogin ? email : null, emailLogin ? hashPassword(password) : null, displayName, typeof body.phone === 'string' ? body.phone || null : null, body.address || null, role);
+    const userId = db.prepare('SELECT user_id FROM account_ids WHERE uuid = ?').get(uuid).user_id;
+    if (typeof body.locationConsent === 'boolean') db.prepare('INSERT INTO location_consents(user_id, accepted) VALUES (?, ?)').run(userId, body.locationConsent ? 1 : 0);
 
     if (business) {
       const businessResult = db.prepare(`
@@ -209,7 +216,7 @@ function provisionAdmin({ email: rawEmail, password, resetPassword = true, promo
         INSERT INTO users (uuid, email, password_hash, display_name, role)
         VALUES (?, ?, ?, 'CALAR 관리자', 'admin')
       `).run(randomUUID(), email, hashPassword(password));
-      const id = Number(result.lastInsertRowid);
+      const id = db.prepare('SELECT user_id FROM users WHERE email = ?').get(email).user_id;
 
       return publicUser(id);
     }
@@ -317,6 +324,15 @@ function resetPassword(body) {
   });
 }
 
+function createCustomerSession() {
+  return transaction(() => {
+    const uuid = randomUUID();
+    db.prepare("INSERT INTO users (uuid, display_name, role) VALUES (?, ?, 'customer')").run(uuid, '고객');
+    const userId = db.prepare('SELECT user_id FROM account_ids WHERE uuid = ?').get(uuid).user_id;
+    return { ...createSession(userId), user: publicUser(userId) };
+  });
+}
+
 function authenticatePhone(phone, requestId) {
   return transaction(() => {
     const consumed = db.prepare("UPDATE phone_verification_requests SET used_at = datetime('now') WHERE uuid = ? AND phone = ? AND used_at IS NULL AND expires_at > ?")
@@ -329,9 +345,10 @@ function authenticatePhone(phone, requestId) {
       if (!existing || existing.role !== 'customer') throw new HttpError(403, 'Phone account unavailable');
     } else {
       // Never attach phone login to an owner/admin account based on an unverified profile phone.
-      const result = db.prepare("INSERT INTO users (uuid, email, password_hash, display_name, phone, role) VALUES (?, ?, ?, '고객', ?, 'customer')")
-        .run(randomUUID(), `${randomUUID()}@phone.calar.invalid`, hashPassword(randomBytes(32).toString('hex')), `0${phone.slice(3)}`);
-      userId = Number(result.lastInsertRowid);
+      const uuid = randomUUID();
+      db.prepare("INSERT INTO users (uuid, display_name, phone, role) VALUES (?, '??', ?, 'customer')")
+        .run(uuid, `0${phone.slice(3)}`);
+      userId = db.prepare('SELECT user_id FROM account_ids WHERE uuid = ?').get(uuid).user_id;
       db.prepare('INSERT INTO phone_identities (phone, user_id) VALUES (?, ?)').run(phone, userId);
     }
     db.prepare("UPDATE phone_identities SET verified_at = datetime('now') WHERE phone = ?").run(phone);
@@ -357,6 +374,7 @@ function bootstrapAdmin() {
 bootstrapAdmin();
 
 module.exports = {
+  createCustomerSession,
   authenticatePhone,
   requestEmailVerification,
   verifyEmail,

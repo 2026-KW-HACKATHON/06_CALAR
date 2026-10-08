@@ -2,6 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHmac } = require('node:crypto');
 const sms = require('../services/smsService');
+test('SMS autofill messages bind Android app hash and web domain without changing the OTP', () => {
+  const saved = process.env.CALAR_PUBLIC_URL;
+  process.env.CALAR_PUBLIC_URL = 'https://wolgye.kr';
+  try {
+    assert.equal(sms.codeMessage('012345', 'AbCdEf12+/Z'), '<#> [CALAR] Code: 012345 (10 min)\nAbCdEf12+/Z');
+    assert.ok(sms.codeMessage('012345').endsWith('@wolgye.kr #012345'));
+    assert.equal(sms.codeMessage('012345', undefined, true), '[CALAR] Code: 012345 (10 min)');
+    assert.throws(() => sms.codeMessage('012345', 'bad\nhash'), /Invalid app hash/);
+  } finally { if (saved === undefined) delete process.env.CALAR_PUBLIC_URL; else process.env.CALAR_PUBLIC_URL = saved; }
+});
 
 test('SOLAPI 요청 서명, 발신번호 정규화, 발송 실패 처리를 검증한다', async () => {
   const saved = { ...process.env };

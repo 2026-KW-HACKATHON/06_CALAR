@@ -1,0 +1,58 @@
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #171512; --color-surface: #24211d;
+  --color-text: #faf3e9; --color-text-sub: #d4c9ba;
+  --color-border: #534b42; --color-border-strong: #a59888;
+  --color-primary: #ffb58a; --color-primary-pressed: #f49b66; --color-primary-soft: #432c21;
+  --color-call: #286b48; --color-focus: #9bc5ff;
+  --color-disabled-bg: #39352f; --color-disabled-text: #c2b5a6; --color-error: #ffb4aa;
+  --color-surface-muted: #302b25; --color-tab-track: #342d26; --color-divider: #534b42;
+  --color-owner-bg: #171512; --color-owner-tab-track: #342d26;
+  --color-info: #31639b; --color-input-focus-ring: #355173;
+  --badge-open-bg: #193e2c; --badge-open-text: #a1e8bc;
+  --badge-closed-bg: #39342d; --badge-closed-text: #e5d9cc;
+  --status-pending-bg: #483718; --status-pending-text: #ffdd8b;
+  --status-accepted-bg: #243d5e; --status-accepted-text: #b6d5ff;
+  --status-rejected-bg: #4a2421; --status-rejected-text: #ffc2b8;
+  --status-done-bg: #39342d; --status-done-text: #faf3e9;
+}
+html[data-theme='dark'] :is(input, select, textarea) { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border-strong); }
+html[data-theme='dark'] :is(input, textarea)::placeholder { color: var(--color-text-sub); opacity: 1; }
+html[data-theme='dark'] :is(.first-guide, .mileage-goal, .wallet-history__panel, .discovery-action, .owner-introduction, .customer-notification, .photo-example-card, .admin-editor, .admin-table, .inquiry-chat) { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+html[data-theme='dark'] :is(.wallet-history__card--orders, .wallet-card--orders) { background: #3a281f; color: var(--color-text); border-color: var(--color-border-strong); }
+html[data-theme='dark'] :is(.wallet-history__card--coupons, .wallet-card--coupons, .virtual-store-badge) { background: #302c25; color: var(--color-text); border-color: var(--color-border-strong); }
+html[data-theme='dark'] .wallet-history__count { background: var(--color-surface); }
+html[data-theme='dark'] .wallet-history__card.is-open { border-color: var(--color-primary); }
+html[data-theme='dark'] .mileage-goal__track { background: #39352f; border-color: var(--color-border-strong); }
+html[data-theme='dark'] :is(.btn--primary, .customer-nav__camera .customer-nav__icon, .tips__num) { color: #241810; }
+html[data-theme='dark'] .customer-nav__camera .customer-nav__icon { border-color: var(--color-surface); }
+html[data-theme='dark'] .home-recommendation-button:hover:not(:disabled) { background: #563724; }
+html[data-theme='dark'] .header__inquiry { background: #432c21; border-color: #b08160; color: var(--color-primary); }
+html[data-theme='dark'] .header__inquiry-icon { background: var(--color-primary); color: #241810; }
+html[data-theme='dark'] :is(.photo-manager, .photo-upload) { background: #302820; color: var(--color-primary); border-color: #aa8363; }
+html[data-theme='dark'] :is(.photo-help, .photo-example-card a, .nearby-location-note) { color: var(--color-text-sub); }
+html[data-theme='dark'] :is(.photo-examples summary, .photo-example-card button) { color: var(--color-primary); }
+html[data-theme='dark'] .photo-example-card button { background: var(--color-primary-soft); }
+html[data-theme='dark'] .settings-toggle__track > span { background: #fff; }
+html[data-theme='dark'] body { background: var(--color-bg); }
+html[data-theme='dark'] :is(.lead-sub, .field__hint, .tab, .sticky-bar__note, .total-row__label, .store-info__desc, .qty-card__price, .order-done__msg, .progress-text__body, .result-count, .request-card__total-label) { color: var(--color-text-sub); }
+html[data-theme='dark'] .tab[aria-selected='true'] { color: var(--color-primary); }
+html[data-theme='dark'] :is(.header__back, .qty-btn, .pickup-wheel__arrow, .inquiry-admin aside button) { background: var(--color-surface-muted); color: var(--color-text); border-color: var(--color-border); }
+html[data-theme='dark'] :is(.qty-card--on, .inquiry-chat__welcome) { background: var(--color-primary-soft); border-color: var(--color-border); }
+html[data-theme='dark'] .skeleton__line { background: var(--color-surface-muted); }
+html[data-theme='dark'] :is(.btn--loading, .hero-btn--primary, .coupon__rate, .time-btn[aria-checked='true'], .pickup-picker__summary, .inquiry-chat__avatar, .inquiry-chat__composer button, .inquiry-chat__message.is-mine p, .btn--danger) { color: #241810; }
+html[data-theme='dark'] .qty-card__count { background: var(--color-primary); color: #241810; }
+html[data-theme='dark'] .pickup-wheel__item { color: var(--color-text-sub); }
+html[data-theme='dark'] .pickup-wheel__item[aria-selected='true'] { color: var(--color-primary); }
+html[data-theme='dark'] .pickup-picker__divider { background: var(--color-border); }
+html[data-theme='dark'] .pickup-picker__summary.is-empty { background: var(--color-surface-muted); color: var(--color-text); }
+html[data-theme='dark'] :is(.inquiry-chat__composer, .inquiry-chat__message p, .toast) { background: var(--color-surface-muted); color: var(--color-text); border-color: var(--color-border); }
+html[data-theme='dark'] .inquiry-chat__message.is-mine p { background: var(--color-primary); color: #241810; }
+html[data-theme='dark'] .pickup-wheel__item.is-selected { color: var(--color-primary); }
+html[data-theme='dark'] .pickup-wheel__item:disabled { color: var(--color-disabled-text); }
+html[data-theme='dark'] .customer-nav__link { color: var(--color-text-sub); }
+html[data-theme='dark'] .customer-nav__link.is-active { background: var(--color-primary-soft); color: var(--color-primary); }
+html[data-theme='dark'] .header__inquiry:is(:hover, :active) { background: #563724; }
+html[data-theme='dark'] .settings-toggle[aria-checked=true] .settings-toggle__track > span { background: #241810; }
+html[data-theme='dark'] .owner-count { color: var(--color-text-sub); }
+html[data-theme='dark'] .admin-tabs button[aria-pressed='true'] { color: #241810; }

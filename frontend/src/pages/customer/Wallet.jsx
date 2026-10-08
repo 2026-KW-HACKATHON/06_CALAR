@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import Header from '../../components/common/Header';
 import BigButton from '../../components/common/BigButton';
 import { LoadingBox, MessageBox } from '../../components/common/StateBox';
-import PhoneVerification from '../../components/order/PhoneVerification';
+import CustomerSession from '../../components/order/CustomerSession';
 import api from '../../services/api';
 import { getToken } from '../../services/session';
 import useFetch from '../../hooks/useFetch';
@@ -39,8 +39,8 @@ export default function Wallet() {
   return <div className="screen"><Header title="내 크레딧" showBackButton showRoleSwitch />
     <main className="screen__body"><div className="stack">
       {wallet.status === 'loading' && <LoadingBox>잔액을 확인하고 있어요…</LoadingBox>}
-      {wallet.status === 'error' && (getToken() ? <MessageBox tone="error" title="크레딧을 불러오지 못했어요" body="다시 시도해 주세요." actionLabel="다시 시도" onAction={wallet.reload} /> : <PhoneVerification onVerified={() => setLoginTick((n) => n + 1)} />)}
-      {wallet.status === 'ready' && !wallet.data && <PhoneVerification onVerified={() => setLoginTick((n) => n + 1)} />}
+      {wallet.status === 'error' && (getToken() ? <MessageBox tone="error" title="크레딧을 불러오지 못했어요" body="다시 시도해 주세요." actionLabel="다시 시도" onAction={wallet.reload} /> : <CustomerSession onVerified={() => setLoginTick((n) => n + 1)} />)}
+      {wallet.status === 'ready' && !wallet.data && <CustomerSession onVerified={() => setLoginTick((n) => n + 1)} />}
       {wallet.status === 'ready' && wallet.data && <>
         <h2 className="lead">{wallet.data.credit.toLocaleString('ko-KR')} 크레딧</h2>
         {wallet.data.kakaoPay?.enabled && <form className="stack owner-login menu-editor" onSubmit={pay}>

@@ -102,7 +102,7 @@ test('POST /api/orders: body 형식', async () => {
 });
 
 test('POST /api/orders: 필수값과 storeId', async () => {
-  for (const field of ['storeId', 'items', 'pickupTime', 'customerPhone']) {
+  for (const field of ['storeId', 'items', 'pickupTime']) {
     for (const empty of [undefined, null, '']) {
       await expectError(post({ ...valid(), [field]: empty }), 400, `${field} is required`);
     }
@@ -158,8 +158,10 @@ test('POST /api/orders: pickupTime (형식, 실제 날짜, 과거, 30일, 영업
 });
 
 test('POST /api/orders: customerPhone', async () => {
-  for (const customerPhone of ['---------', '12345', '010-1234-567', '010-12345-6789', '010 1234 5678', '+82-10-1234-5678', 'abc-defg-hijk', 1012345678]) {
-    await expectError(post({ ...valid(), customerPhone }), 400, 'Invalid customerPhone format');
+  for (const customerPhone of ['---------', '12345', '010-1234-567', '010-12345-6789', '010 1234 5678', '+82-10-1234-5678', 'abc-defg-hijk', 1012345678, undefined, null, '']) {
+    const response = await post({ ...valid(), customerPhone });
+    assert.equal(response.status, 201);
+    assert.equal(response.body.customerPhone, typeof customerPhone === 'string' ? customerPhone : '');
   }
 });
 

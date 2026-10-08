@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#B4400F" />
+    <script>
+      try {
+        const theme = localStorage.getItem('calar.theme') === 'dark' ? 'dark' : 'light';
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        if (theme === 'dark') document.querySelector('meta[name="theme-color"]').content = '#171512';
+      } catch {}
+    </script>
     <title>월계 - 우리 동네 가게 찾기</title>
 
     <!-- 본문 글꼴: Pretendard / 아이콘 글꼴: Material Symbols Rounded (디자인 시안과 동일) -->

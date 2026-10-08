@@ -7,6 +7,37 @@ const { parseId, optionalQueryString } = require('../utils/validate');
 
 const router = express.Router();
 router.use(auth.requireUser, auth.requireRole('owner'));
+const photoService = require('../services/photoService');
+const videoService = require('../services/videoService');
+const videoUpload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 50 * 1024 * 1024, files: 1, fields: 0 } }).single('video');
+const upload = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0 } }).single('image');
+function photoAccess(req, res, next) {
+  managementService.assertStoreAccess(req.user, idParam(req, 'storeId'));
+  next();
+}
+function uploadPhoto(req, res, next) {
+  upload(req, res, (error) => {
+    if (error) return next(new HttpError(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400, '사진 한 장(10MB 이하)을 선택해 주세요.'));
+    next();
+  });
+}
+router.post(['/stores/:storeId/videos', '/stores/:storeId/menus/:menuId/video'], photoAccess, (req, res, next) => {
+  videoUpload(req, res, (error) => {
+    if (error) return next(new HttpError(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400, '동영상 한 개(50MB 이하)를 선택해 주세요.'));
+    next();
+  });
+}, (req, res) => res.status(201).json(videoService.save(idParam(req, 'storeId'), req.params.menuId ? idParam(req, 'menuId') : null, req.file)));
+router.delete('/stores/:storeId/videos/:uuid', photoAccess, (req, res) => {
+  videoService.remove(idParam(req, 'storeId'), req.params.uuid); res.status(204).end();
+});
+router.post(['/stores/:storeId/photos', '/stores/:storeId/menus/:menuId/photo'], photoAccess, uploadPhoto, (req, res) => {
+  res.status(201).json(photoService.save(idParam(req, 'storeId'), req.params.menuId ? idParam(req, 'menuId') : null, req.file));
+});
+router.post('/stores/:storeId/portrait', photoAccess, uploadPhoto, (req, res) => res.status(201).json(photoService.save(idParam(req, 'storeId'), null, req.file, true)));
+router.delete('/stores/:storeId/photos/:uuid', photoAccess, (req, res) => {
+  photoService.remove(idParam(req, 'storeId'), req.params.uuid);
+  res.status(204).end();
+});
 
 function idParam(req, key) {
   const id = parseId(req.params[key]);

@@ -52,12 +52,7 @@ function mapStore(row) {
     JOIN orders o ON o.order_id = r.order_id WHERE o.store_id = ? AND o.status = 'done'`).get(row.id);
   const signKeywords = db.prepare('SELECT name FROM signKeyWords WHERE store_id = ? AND deleted_at IS NULL ORDER BY id').all(row.id);
   const menu = db.prepare('SELECT menu_id AS id, uuid, name, price FROM menus WHERE store_id = ? AND deleted_at IS NULL ORDER BY menu_id').all(row.id);
-  // 사용 기간(valid_from ~ valid_until, 한국 날짜 기준) 안의 쿠폰만 고객에게 보여준다
-  const today = nowKSTString().slice(0, 10);
-  const coupon = db.prepare(`SELECT uuid, title, discount_rate AS discountRate FROM coupons
-    WHERE store_id = ? AND deleted_at IS NULL AND is_active = 1
-      AND (valid_from IS NULL OR valid_from <= ?) AND (valid_until IS NULL OR valid_until >= ?)
-    ORDER BY coupon_id LIMIT 1`).get(row.id, today, today);
+  const coupon = require('./couponService').available(row.id);
   return {
     id: row.id,
     rating: rating.average === null ? null : Math.round(rating.average * 10) / 10,
@@ -71,8 +66,13 @@ function mapStore(row) {
     location: { lat: row.location_lat, lng: row.location_lng },
     openHours: row.open_hours,
     orderType: row.order_type,
+    minOrderMinutes: row.min_order_minutes,
+    isVirtual: Boolean(row.is_virtual),
     signKeywords: signKeywords.map((keyword) => keyword.name),
-    menu,
+    photos: require('./photoService').list(row.id),
+    ownerPhoto: (() => { const photo = db.prepare('SELECT uuid FROM owner_portraits WHERE store_id = ?').get(row.id); return photo ? { uuid: photo.uuid, url: `/api/photos/${photo.uuid}` } : null; })(),
+    videos: require('./videoService').list(row.id),
+    menu: menu.map((item) => ({ ...item, photo: require('./photoService').list(row.id, item.id)[0] ?? null, video: require('./videoService').list(row.id, item.id)[0] ?? null })),
     coupon: coupon ?? null,
     visits: row.visits,
     createdAt: row.created_at,
@@ -83,7 +83,7 @@ function listStores() {
   const rows = db.prepare(`
     SELECT stores.store_id AS id, stores.uuid, stores.name, categories.name AS category,
       stores.description, stores.phone, stores.address, stores.location_lat,
-      stores.location_lng, stores.open_hours, stores.order_type, stores.visits,
+      stores.location_lng, stores.open_hours, stores.order_type, stores.min_order_minutes, stores.is_virtual, stores.visits,
       stores.created_at
     FROM stores
     LEFT JOIN categories ON categories.category_id = stores.category_id AND categories.deleted_at IS NULL
@@ -133,7 +133,7 @@ function findStore(id) {
   const row = db.prepare(`
     SELECT stores.store_id AS id, stores.uuid, stores.name, categories.name AS category,
       stores.description, stores.phone, stores.address, stores.location_lat,
-      stores.location_lng, stores.open_hours, stores.order_type, stores.visits,
+      stores.location_lng, stores.open_hours, stores.order_type, stores.min_order_minutes, stores.is_virtual, stores.visits,
       stores.created_at
     FROM stores
     LEFT JOIN categories ON categories.category_id = stores.category_id AND categories.deleted_at IS NULL

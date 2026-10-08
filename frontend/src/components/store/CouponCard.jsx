@@ -16,6 +16,7 @@ const CouponCard = ({ coupon }) => {
           쿠폰
         </span>
         <span className="coupon__title">{coupon.title}</span>
+        <span>{coupon.targetMenuId ? `${coupon.targetMenuName || '지정 메뉴'} 할인` : '모든 메뉴 할인'}</span>
       </div>
     </section>
   );

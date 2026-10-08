@@ -17,6 +17,7 @@ router.post('/:id/rating', auth.requireUser, (req, res) => {
 
 // 주문/예약 생성 (고객용)
 router.post('/', auth.requireUser, (req, res) => {
+  if (req.body?.paymentMethod === 'credit') throw new HttpError(410, 'Payments are no longer available');
   const order = orderService.createOrder(req.body, { customerId: req.user?.id });
   res.status(201).json(order);
 });

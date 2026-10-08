@@ -1,12 +1,14 @@
 import axios from 'axios';
-import { getToken, clearToken } from './session';
+import { getToken, getRole, clearToken } from './session';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
   const token = getToken();
+  if (getRole() === 'customer') config.headers['X-Calar-Browser-Session'] = '1';
   if (token && !config.headers.Authorization) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });

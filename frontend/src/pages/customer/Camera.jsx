@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../../components/common/Header';
 import Icon from '../../components/common/Icon';
 import CameraCapture from '../../components/camera/CameraCapture';
 import QRScanner from '../../components/camera/QRScanner';
-import ManualInput from '../../components/camera/ManualInput';
+import StoreNumberInput from '../../components/camera/StoreNumberInput';
 import { ROUTES } from '../../constants/routes';
 
 const TABS = [
   ['camera', '카메라', 'photo_camera'],
   ['qr', 'QR', 'qr_code_scanner'],
-  ['manual', '직접 검색', 'search'],
+  ['number', '가게 번호', 'pin'],
 ];
 
 const Camera = () => {
@@ -20,6 +20,7 @@ const Camera = () => {
   // Home 의 "가게 이름으로 찾기" 버튼에서 넘어오면 처음부터 직접 검색 탭을 엽니다.
   const requestedTab = location.state?.tab;
   const [tab, setTab] = useState(TABS.some(([key]) => key === requestedTab) ? requestedTab : 'camera');
+  useEffect(() => { if (TABS.some(([key]) => key === requestedTab)) setTab(requestedTab); }, [requestedTab, location.key]);
 
   const handleRecognized = (store) => {
     navigate(ROUTES.storeDetail(store.id));
@@ -56,10 +57,10 @@ const Camera = () => {
         className="screen__body screen__body--tight"
       >
         {tab === 'camera' && (
-          <CameraCapture onRecognized={handleRecognized} onSwitchToManual={() => setTab('manual')} />
+          <CameraCapture onRecognized={handleRecognized} onSwitchToManual={() => navigate(ROUTES.nearbyStores)} onSwitchToNumber={() => setTab('number')} />
         )}
         {tab === 'qr' && <QRScanner onRecognized={handleRecognized} />}
-        {tab === 'manual' && <ManualInput onSelect={handleRecognized} />}
+        {tab === 'number' && <StoreNumberInput onSelect={handleRecognized} />}
       </main>
     </div>
   );

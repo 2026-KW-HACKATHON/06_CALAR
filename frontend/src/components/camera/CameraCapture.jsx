@@ -4,7 +4,10 @@ import Icon from '../common/Icon';
 import Spinner from '../common/Spinner';
 import { MessageBox } from '../common/StateBox';
 import { resizeImage } from '../../utils/imageResize';
-import { recognizeSignboard } from '../../services/storeService';
+import { getStoreDetail, recognizeSignboard } from '../../services/storeService';
+import StoreCard from '../store/StoreCard';
+import useDiscoveryLocation from '../../hooks/useDiscoveryLocation';
+import { getDistanceKm, formatDistance } from '../../utils/distance';
 
 // 참고: getUserMedia(브라우저 카메라 스트림)는 https 나 localhost 에서만 동작합니다.
 // 데모 때 휴대폰으로 http://192.168.x.x:5173 에 접속하면 카메라가 안 열리므로,
@@ -39,7 +42,7 @@ const ExamplePhoto = () => {
   return (
     <div className="photo-example">
       {ok ? (
-        <img src="/images/sign-example.jpg" alt="간판 글씨가 잘 보이게 찍은 사진 예시" onError={() => setOk(false)} />
+        <img src={`${import.meta.env.BASE_URL}examples/sign.png`} alt="간판 글씨가 잘 보이게 찍은 사진 예시" onError={() => setOk(false)} />
       ) : (
         <span aria-hidden="true">간판 촬영 예시 사진</span>
       )}
@@ -50,7 +53,9 @@ const ExamplePhoto = () => {
 // props
 //  - onRecognized(store) : 인식 성공 시 호출 (가게 상세로 이동)
 //  - onSwitchToManual()  : 인식 실패 시 "직접 검색으로 전환" 버튼을 눌렀을 때 호출
-const CameraCapture = ({ onRecognized, onSwitchToManual }) => {
+const CameraCapture = ({ onRecognized, onSwitchToManual, onSwitchToNumber }) => {
+  const [candidates, setCandidates] = useState([]);
+  const location = useDiscoveryLocation();
   const [phase, setPhase] = useState('idle'); // idle | loading | nomatch | error
   const [previewUrl, setPreviewUrl] = useState(null);
   const previewRef = useRef(null);
@@ -66,7 +71,8 @@ const CameraCapture = ({ onRecognized, onSwitchToManual }) => {
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // 같은 사진을 다시 골라도 반응하도록 초기화
-    if (!file) return;
+    if (!file || phase === 'loading') return;
+    setCandidates([]);
 
     replacePreview(URL.createObjectURL(file));
     setPhase('loading');
@@ -75,8 +81,9 @@ const CameraCapture = ({ onRecognized, onSwitchToManual }) => {
       const resized = await resizeImage(file, 1600);
       const result = await recognizeSignboard(resized); // { matched, stores }
 
-      if (result?.matched && result.stores?.length > 0) {
-        onRecognized(result.stores[0]);
+      if (result.stores?.length > 0) {
+        const details = await Promise.all(result.stores.slice(0, 3).map((store) => getStoreDetail(store.id)));
+        setCandidates(details); setPhase('candidates');
       } else {
         setPhase('nomatch');
       }
@@ -84,6 +91,12 @@ const CameraCapture = ({ onRecognized, onSwitchToManual }) => {
       setPhase('error');
     }
   };
+
+  if (phase === 'candidates') return <div className="stack"><h2 className="section-title">이 가게가 맞나요?</h2><p>간판 인식 결과를 확인하고 맞는 가게를 눌러 주세요.</p>
+    <ul className="store-list">{candidates.map((store) => {
+      const km = getDistanceKm(location, store.location);
+      return <li key={store.id}><StoreCard store={store} distanceText={km === null ? '거리 확인 전' : formatDistance(km)} onClick={onRecognized} /></li>;
+    })}</ul><PhotoButton onPick={handleFile}>다시 찍기</PhotoButton><BigButton variant="secondary" onClick={onSwitchToManual}>가게 탭에서 검색</BigButton><BigButton variant="secondary" onClick={onSwitchToNumber}>가게 번호 입력</BigButton></div>;
 
   if (phase === 'loading') {
     return (
@@ -109,20 +122,21 @@ const CameraCapture = ({ onRecognized, onSwitchToManual }) => {
     return (
       <>
         <MessageBox tone="error" icon={fail.icon} title={fail.title} body={fail.body} />
-        {isNoMatch && (
+        {(
           <>
             <div className="tip-box">
               <Icon name="lightbulb" />
               간판에 적힌 가게 이름으로 찾아볼 수 있어요.
             </div>
             <BigButton size="lg" icon="search" onClick={onSwitchToManual}>
-              직접 검색으로 전환
+              가게 탭에서 검색
             </BigButton>
           </>
         )}
         <PhotoButton onPick={handleFile} variant={isNoMatch ? 'secondary' : 'primary'}>
           다시 찍기
         </PhotoButton>
+        <BigButton variant="secondary" onClick={onSwitchToNumber}>가게 번호 입력</BigButton>
       </>
     );
   }

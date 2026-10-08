@@ -14,7 +14,8 @@ function rate(userId, orderId, body) {
 
 function mine(userId) {
   return db.prepare(`SELECT o.order_id AS id, o.store_id AS storeId, s.name AS storeName,
-    o.status, o.total_price AS totalPrice, o.created_at AS createdAt, r.score AS rating
+    o.status, o.total_price AS totalPrice, o.created_at AS createdAt, r.score AS rating,
+    o.pickup_time AS pickupTime, o.party_size AS partySize
     FROM orders o JOIN stores s ON s.store_id = o.store_id
     LEFT JOIN order_ratings r ON r.order_id = o.order_id
     WHERE o.customer_id = ? ORDER BY o.order_id DESC LIMIT 100`).all(userId);

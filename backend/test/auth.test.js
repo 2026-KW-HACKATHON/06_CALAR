@@ -278,7 +278,7 @@ test('관리 API 입력 검증: 업종 중복 409, 자기 계정 정지 우회 �
   const fixed = await coupon({ title: '반찬 1,000원 할인' }); // 금액 할인: discountRate 생략
   assert.equal(fixed.status, 201);
   assert.equal(fixed.body.discountRate, null);
-  assert.deepEqual((await request('GET', '/api/stores/4')).body.coupon, { uuid: fixed.body.uuid, title: '반찬 1,000원 할인', discountRate: null });
+  assert.deepEqual((await request('GET', '/api/stores/4')).body.coupon, { uuid: fixed.body.uuid, title: '반찬 1,000원 할인', discountRate: null, targetMenuId: 0, targetMenuName: null });
 });
 
 test('로그인 시 같은 날 만료된 세션도 정리한다', async () => {

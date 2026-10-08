@@ -12,7 +12,15 @@ if (databasePath !== ':memory:') {
 
 const db = new DatabaseSync(databasePath);
 db.exec('PRAGMA foreign_keys = ON');
+require('./services/userMigration')(db);
+if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'stores'").get() && !db.prepare('PRAGMA table_info(stores)').all().some(column => column.name === 'is_virtual')) {
+  db.exec('ALTER TABLE stores ADD COLUMN is_virtual INTEGER NOT NULL DEFAULT 0 CHECK (is_virtual IN (0, 1))');
+  db.exec("UPDATE stores SET is_virtual = 1 WHERE store_id BETWEEN 1 AND 5 AND address LIKE '%가상 주소%'");
+}
 db.exec(fs.readFileSync(path.join(__dirname, 'setup.sql'), 'utf8'));
+if (!db.prepare('PRAGMA table_info(coupons)').all().some(column => column.name === 'target_menu_id')) {
+  db.exec('ALTER TABLE coupons ADD COLUMN target_menu_id INTEGER NOT NULL DEFAULT 0 CHECK (target_menu_id >= 0)');
+}
 
 db.exec('DROP TABLE IF EXISTS importantDetailsUpdate');
 if (!db.prepare('PRAGMA table_info(users)').all().some((column) => column.name === 'credit')) {
@@ -42,7 +50,7 @@ for (const table of ['users', 'business_registrations', 'categories', 'stores', 
 }
 
 const uuidTables = [
-  ['users', 'user_id'],
+  ['account_ids', 'user_id'],
   ['business_registrations', 'registration_id'],
   ['user_sessions', 'session_id'],
   ['categories', 'category_id'],
@@ -73,14 +81,18 @@ for (const [table, primaryKey] of uuidTables) {
 }
 
 const storeColumns = db.prepare('PRAGMA table_info(stores)').all();
+if (!storeColumns.some(column => column.name === 'min_order_minutes')) db.exec('ALTER TABLE stores ADD COLUMN min_order_minutes INTEGER NOT NULL DEFAULT 0 CHECK (min_order_minutes BETWEEN 0 AND 43200)');
 if (!storeColumns.some((column) => column.name === 'owner_id')) {
-  db.exec('ALTER TABLE stores ADD COLUMN owner_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL');
+  db.exec('ALTER TABLE stores ADD COLUMN owner_id INTEGER REFERENCES account_ids(user_id) ON DELETE SET NULL');
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_stores_owner_id ON stores(owner_id)');
 
 const orderColumns = db.prepare('PRAGMA table_info(orders)').all();
+if (!orderColumns.some(column => column.name === 'party_size')) db.exec('ALTER TABLE orders ADD COLUMN party_size INTEGER CHECK (party_size BETWEEN 1 AND 99)');
+if (!orderColumns.some(column => column.name === 'coupon_uuid')) db.exec('ALTER TABLE orders ADD COLUMN coupon_uuid TEXT');
+if (!orderColumns.some(column => column.name === 'discount_amount')) db.exec('ALTER TABLE orders ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0 CHECK (discount_amount >= 0)');
 if (!orderColumns.some((column) => column.name === 'customer_id')) {
-  db.exec('ALTER TABLE orders ADD COLUMN customer_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL');
+  db.exec('ALTER TABLE orders ADD COLUMN customer_id INTEGER REFERENCES account_ids(user_id) ON DELETE SET NULL');
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_payment_reference ON orders(customer_id, payment_reference)');

@@ -5,6 +5,8 @@
 export const ROUTES = {
   home: '/',
   customerHome: '/customer',
+  nearbyStores: '/customer/nearby',
+  settings: '/customer/settings',
   ownerSelect: '/owner',
   camera: '/camera',
   recommendation: '/recommendation',

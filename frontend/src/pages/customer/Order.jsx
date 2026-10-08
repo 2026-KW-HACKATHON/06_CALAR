@@ -9,10 +9,11 @@ import { getStoreDetail } from '../../services/storeService';
 import { getOrderStatus } from '../../services/orderService';
 import { ROUTES } from '../../constants/routes';
 import useFetch from '../../hooks/useFetch';
-import PhoneVerification from '../../components/order/PhoneVerification';
+import CustomerSession from '../../components/order/CustomerSession';
 import api from '../../services/api';
 import OrderRating from '../../components/order/OrderRating';
 import { getToken } from '../../services/session';
+import { ensureCustomerSession } from '../../services/customerSession';
 
 const POLL_MS = 10000; // 접수 후 가게가 수락/거절했는지 10초마다 확인
 
@@ -25,8 +26,7 @@ const Order = () => {
     let active = true;
     const expired = () => setUser(null);
     window.addEventListener('calar-session-expired', expired);
-    if (!getToken()) setUser(null);
-    else api.get('/api/auth/me').then(({ data }) => { if (active) setUser(data.user); }).catch(() => { if (active) setUser(null); });
+    ensureCustomerSession().then((customer) => { if (active) setUser(customer); }).catch(() => { if (active) setUser(null); });
     return () => { active = false; window.removeEventListener('calar-session-expired', expired); };
   }, []);
 
@@ -98,15 +98,16 @@ const Order = () => {
 
       {status === 'ready' && store.orderType !== 'none' && !submittedOrder && user === undefined && <LoadingBox>로그인 상태 확인 중…</LoadingBox>}
       {status === 'ready' && store.orderType !== 'none' && !submittedOrder && user === null && (
-        <main className="screen__body"><PhoneVerification onVerified={setUser} /></main>
+        <main className="screen__body"><CustomerSession onVerified={setUser} /></main>
       )}
       {status === 'ready' && store.orderType !== 'none' && !submittedOrder && user && (
         <OrderForm
           storeId={store.id}
           menu={store.menu}
+          coupon={store.coupon?.discountRate > 0 ? store.coupon : null}
+          orderType={store.orderType}
+          minOrderMinutes={store.minOrderMinutes}
           openHours={store.openHours}
-          initialPhone={user.phone || ''}
-          initialCredit={user.credit || 0}
           onSuccess={setSubmittedOrder}
         />
       )}

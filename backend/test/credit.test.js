@@ -20,20 +20,21 @@ test('충전·선결제·환불은 중복 요청에 한 번만 반영되고 잔�
     const headers = { authorization: `Bearer ${token}` };
     assert.equal(credit.balance(user.id), 0);
     const body = { amount: 20000, requestId: randomUUID() };
-    const topup = () => server.request('POST', '/api/auth/wallet/dev-topup', { headers, json: body });
+    const topup = async () => { try { return { status: 200, body: credit.topup(user.id, body) }; } catch (error) { return { status: error.status }; } };
+    const createLegacy = async json => { try { return { status: 201, body: orders.createOrder(json, { customerId: user.id }) }; } catch (error) { return { status: error.status }; } };
     assert.equal((await topup()).body.credit, 20000);
     assert.equal((await topup()).body.credit, 20000);
     assert.equal(credit.wallet(user.id).transactions.length, 1);
     assert.throws(() => credit.topup(user.id, { ...body, amount: 30000 }), /already used/);
     const pickupTime = new Date(Date.now() + 9 * 60 * 60 * 1000 + 86400000).toISOString().slice(0, 10) + 'T12:30';
     const orderBody = { storeId: 1, items: [{ menuId: 101, quantity: 1 }], pickupTime, customerPhone: '01012345678', paymentMethod: 'credit', requestId: randomUUID() };
-    const first = await server.request('POST', '/api/orders', { headers, json: orderBody });
+    const first = await createLegacy(orderBody);
     assert.equal(first.status, 201);
     assert.equal(credit.balance(user.id), 12000);
-    const repeat = await server.request('POST', '/api/orders', { headers, json: orderBody });
+    const repeat = await createLegacy(orderBody);
     assert.equal(repeat.body.id, first.body.id);
     assert.equal(credit.balance(user.id), 12000);
-    assert.equal((await server.request('POST', '/api/orders', { headers, json: { ...orderBody, items: [{ menuId: 101, quantity: 2 }] } })).status, 409);
+    assert.equal((await createLegacy({ ...orderBody, items: [{ menuId: 101, quantity: 2 }] })).status, 409);
     const count = db.prepare('SELECT COUNT(*) AS count FROM orders').get().count;
     assert.throws(() => orders.createOrder({ ...orderBody, requestId: randomUUID(), items: [{ menuId: 101, quantity: 3 }] }, { customerId: user.id }), /Insufficient credit/);
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM orders').get().count, count);
@@ -45,14 +46,14 @@ test('충전·선결제·환불은 중복 요청에 한 번만 반영되고 잔�
     assert.deepEqual(credit.wallet(user.id).transactions.map((item) => item.kind), ['refund', 'payment', 'topup']);
     // 같은 메뉴를 나눠 보낸 주문도 재시도하면 (서버가 합쳐 저장했어도) 같은 주문으로 인정한다
     const split = { ...orderBody, requestId: randomUUID(), items: [{ menuId: 101, quantity: 1 }, { menuId: 101, quantity: 1 }] };
-    const splitFirst = await server.request('POST', '/api/orders', { headers, json: split });
+    const splitFirst = await createLegacy(split);
     assert.equal(splitFirst.status, 201);
-    const splitRepeat = await server.request('POST', '/api/orders', { headers, json: split });
+    const splitRepeat = await createLegacy(split);
     assert.equal(splitRepeat.status, 201);
     assert.equal(splitRepeat.body.id, splitFirst.body.id);
     assert.equal(credit.balance(user.id), 4000);
     // 이미 쓴 requestId에 형식이 깨진 items → 500이 아니라 409
-    assert.equal((await server.request('POST', '/api/orders', { headers, json: { ...split, items: [null] } })).status, 409);
+    assert.equal((await createLegacy({ ...split, items: [null] })).status, 409);
     process.env.NODE_ENV = 'production';
     assert.equal((await topup()).status, 403);
   } finally {

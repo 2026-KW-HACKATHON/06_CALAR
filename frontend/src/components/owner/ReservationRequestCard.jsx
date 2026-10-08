@@ -58,6 +58,7 @@ const ReservationRequestCard = ({ order, storeMenu = [], onAccept, onReject, onD
       </div>
 
       <ul className="request-card__items">
+        {order.partySize && <li><span>방문 예약</span><span>{order.partySize}명</span></li>}
         {order.items.map((item, idx) => (
           <li key={`${item.menuId}-${idx}`}>
             <span>{getMenuName(item.menuId)}</span>

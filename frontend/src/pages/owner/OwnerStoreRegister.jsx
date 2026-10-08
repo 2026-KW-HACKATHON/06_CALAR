@@ -8,8 +8,9 @@ import api from '../../services/api';
 
 export default function OwnerStoreRegister() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', categoryId: '', address: '', phone: '', description: '', open: '09:00', close: '18:00', orderType: 'preorder' });
+  const [form, setForm] = useState({ name: '', categoryId: '', address: '', phone: '', description: '', open: '09:00', close: '18:00', orderType: 'preorder', minOrderMinutes: '0' });
   const [busy, setBusy] = useState(false);
+  const [storeKind, setStoreKind] = useState('');
   const [error, setError] = useState('');
   const info = useFetch(async () => {
     const [categories, profile] = await Promise.all([api.get('/api/owner/categories'), api.get('/api/auth/me')]);
@@ -26,6 +27,8 @@ export default function OwnerStoreRegister() {
         name: form.name.trim(), categoryId: Number(form.categoryId), address: form.address.trim(),
         phone: form.phone.trim(), description: form.description.trim(),
         openHours: `${form.open}-${form.close}`, orderType: form.orderType,
+        minOrderMinutes: Number(form.minOrderMinutes || 0),
+        isVirtual: storeKind === 'virtual',
       });
       navigate('/owner', { replace: true, state: { registeredStore: data.name } });
     } catch (err) {
@@ -54,6 +57,7 @@ export default function OwnerStoreRegister() {
           <fieldset className="auth-fields stack" disabled={busy || !approved}>
             <legend>가게 정보</legend>
             {input('name', '가게 이름', { required: true, maxLength: 120, autoComplete: 'organization' })}
+            <label className="stack">실제 운영하는 점포인가요?<select required value={storeKind} onChange={(event) => setStoreKind(event.target.value)}><option value="">점포 유형을 선택해 주세요</option><option value="real">실제 점포예요</option><option value="virtual">가상·예시 점포예요</option></select></label>
             <label className="stack">업종
               <select name="categoryId" value={form.categoryId} onChange={change} required>
                 <option value="">업종을 선택해 주세요</option>
@@ -67,6 +71,8 @@ export default function OwnerStoreRegister() {
             </label>
             {input('open', '영업 시작 시간', { type: 'time', required: true })}
             {input('close', '영업 종료 시간', { type: 'time', required: true })}
+            {input('minOrderMinutes', '최소 주문·예약 준비 시간 (분)', { type: 'number', inputMode: 'numeric', min: 0, max: 43200, step: 1, placeholder: '예: 30', required: true })}
+            <p>예: 30분이면 지금부터 30분 이후의 시간만 예약할 수 있어요. 0분은 제한 없음이에요.</p>
             <label className="stack">주문·예약 방식
               <select name="orderType" value={form.orderType} onChange={change}>
                 <option value="preorder">미리 주문</option>

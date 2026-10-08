@@ -10,6 +10,8 @@ import CouponCard from '../../components/store/CouponCard';
 import { getStoreDetail } from '../../services/storeService';
 import { ROUTES } from '../../constants/routes';
 import useFetch from '../../hooks/useFetch';
+import { photoUrl } from '../../utils/photoUrl';
+import FavoriteButton from '../../components/customer/FavoriteButton';
 
 const StoreDetail = () => {
   const { storeId } = useParams(); // useParams 결과는 항상 문자열 -> 숫자로 바꿔서 사용
@@ -62,6 +64,14 @@ const StoreDetail = () => {
           {/* 혜택(쿠폰)이 먼저 보이도록 StoreInfo 바로 아래에 둡니다 */}
           <main className="screen__body">
             <StoreInfo store={store} />
+            <FavoriteButton storeId={store.id} />
+            {store.ownerPhoto && <section className="owner-introduction"><img src={photoUrl(store.ownerPhoto.url)} alt={`${store.name} 사장님`} /><div><h2 className="section-title">우리 가게 사장님</h2><p>반갑게 맞이할게요.</p></div></section>}
+            {store.videos?.length > 0 && <section className="stack"><h2 className="section-title">매장 동영상</h2>
+              {store.videos.map((video) => <video className="store-video" key={video.uuid} src={photoUrl(video.url)} controls autoPlay muted playsInline preload="metadata" aria-label={`${store.name} 매장 동영상`} />)}
+            </section>}
+            {store.photos?.length > 0 && <section className="stack"><h2 className="section-title">매장 둘러보기</h2>
+              <div className="store-photo-gallery">{store.photos.map((photo, index) => <img key={photo.uuid} src={photoUrl(photo.url)} alt={`${store.name} 매장 사진 ${index + 1}`} loading="lazy" />)}</div>
+            </section>}
             <CouponCard coupon={store.coupon} />
             <FeaturedProduct store={store} />
             <MenuList menu={store.menu} />
