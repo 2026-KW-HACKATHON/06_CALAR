@@ -77,7 +77,7 @@
   "id": 1,
   "storeId": 1,
   "items": [
-    { "menuId": 101, "quantity": 2 }
+    { "menuId": 101, "name": "바지락 칼국수", "unitPrice": 8000, "quantity": 2 }
   ],
   "totalPrice": 16000,
   "pickupTime": "2026-10-08T12:30",
@@ -93,12 +93,21 @@
 |---|---|---|
 | `id` | number | 주문 고유 번호 |
 | `storeId` | number | 어느 가게에 낸 주문인지 (Store의 `id`와 연결) |
-| `items` | 배열 | 주문한 메뉴 목록. `menuId`로 어떤 메뉴인지, `quantity`로 몇 개인지 표시 |
+| `items` | 배열 | 주문한 메뉴 목록. 아래 항목별 설명 참고 |
 | `totalPrice` | number | 총 결제 금액 |
 | `pickupTime` | string | 픽업/예약 시간 (`YYYY-MM-DDTHH:mm` 형식, ISO 8601이라고 부름. 한국 시간 기준) |
 | `customerPhone` | string | 주문한 고객 연락처 |
 | `status` | string | 아래 표 참고 |
 | `createdAt` | string | 주문 생성 시각 (`YYYY-MM-DDTHH:mm`, 한국 시간 기준. DB에는 UTC로 저장되지만 백엔드가 변환해서 내려줍니다) |
+
+**`items` 항목별 설명** (응답에만 해당. 주문 생성 요청에는 `menuId`, `quantity`만 보냄)
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `menuId` | number 또는 `null` | 주문한 메뉴 id. 그 메뉴가 나중에 삭제되면 `null` |
+| `name` | string | 주문 당시 메뉴 이름 (메뉴가 바뀌거나 지워져도 그대로 남음) |
+| `unitPrice` | number | 주문 당시 메뉴 1개 가격 (원) |
+| `quantity` | number | 수량 |
 
 **`status` 값의 흐름**
 
@@ -350,7 +359,7 @@ POST /api/orders
 {
   "id": 1,
   "storeId": 1,
-  "items": [{ "menuId": 101, "quantity": 2 }],
+  "items": [{ "menuId": 101, "name": "바지락 칼국수", "unitPrice": 8000, "quantity": 2 }],
   "totalPrice": 16000,
   "pickupTime": "2026-10-08T12:30",
   "customerPhone": "010-0000-0000",
