@@ -1,5 +1,5 @@
 const db = require('../db');
-const { nowMinutesKST, toMinutes, daysSince } = require('../utils/time');
+const { nowMinutesKST, nowKSTString, toMinutes, daysSince } = require('../utils/time');
 const { distanceKm } = require('../utils/geo');
 
 // 추천 기준값 (팀 협의 전 임시값)
@@ -7,6 +7,9 @@ const NEW_STORE_DAYS = 30; // 등록 30일 이내면 "신규 가게"
 const LOW_VISITS = 30; // 방문수 30 이하면 "저활성 가게"
 const RECOMMEND_RADIUS_KM = 2; // 좌표를 보내면 이 반경 안의 가게만 추천
 const RECOMMEND_LIMIT = 10;
+// 추천 카드에 그대로 보여줄 추천 이유 (프론트 RecommendationReason)
+const REASON_NEW = '새로 오픈했어요';
+const REASON_LOW_VISITS = '숨어있는 동네 가게예요';
 
 // 간판 매칭 기준: 가게 이름 전체가 보이면 10점, 키워드 하나당 1점. 2점 이상이어야 매칭으로 인정
 const NAME_MATCH_SCORE = 10;
@@ -49,7 +52,12 @@ function mapStore(row) {
     JOIN orders o ON o.order_id = r.order_id WHERE o.store_id = ? AND o.status = 'done'`).get(row.id);
   const signKeywords = db.prepare('SELECT name FROM signKeyWords WHERE store_id = ? AND deleted_at IS NULL ORDER BY id').all(row.id);
   const menu = db.prepare('SELECT menu_id AS id, uuid, name, price FROM menus WHERE store_id = ? AND deleted_at IS NULL ORDER BY menu_id').all(row.id);
-  const coupon = db.prepare('SELECT uuid, title, discount_rate AS discountRate FROM coupons WHERE store_id = ? AND deleted_at IS NULL AND is_active = 1 ORDER BY coupon_id LIMIT 1').get(row.id);
+  // 사용 기간(valid_from ~ valid_until, 한국 날짜 기준) 안의 쿠폰만 고객에게 보여준다
+  const today = nowKSTString().slice(0, 10);
+  const coupon = db.prepare(`SELECT uuid, title, discount_rate AS discountRate FROM coupons
+    WHERE store_id = ? AND deleted_at IS NULL AND is_active = 1
+      AND (valid_from IS NULL OR valid_from <= ?) AND (valid_until IS NULL OR valid_until >= ?)
+    ORDER BY coupon_id LIMIT 1`).get(row.id, today, today);
   return {
     id: row.id,
     rating: rating.average === null ? null : Math.round(rating.average * 10) / 10,
@@ -161,24 +169,32 @@ function getStoreById(id, { visitorKey } = {}) {
   return withOpenStatus(store);
 }
 
-// 오늘의 동네 추천: 신규 가게(최근 등록순) → 저활성 가게(방문 적은 순)
+function hasLocation(store) {
+  return Number.isFinite(store.location?.lat) && Number.isFinite(store.location?.lng);
+}
+
+// 오늘의 동네 추천: 신규 가게(최근 등록순) → 저활성 가게(방문 적은 순), 각 가게에 추천 이유(reason) 포함
 function getRecommendedStores({ lat, lng } = {}) {
   let candidates = listStores();
 
   if (lat !== undefined && lng !== undefined) {
     const origin = { lat, lng };
+    // 점주가 직접 등록한 가게는 좌표가 없을 수 있다. 거리를 모를 뿐이니 반경 필터에서 빼지 않는다
+    // (안 그러면 추천의 주 대상인 신규 가게가 위치를 보낸 사용자에게는 전부 사라진다)
     candidates = candidates.filter(
-      (store) => distanceKm(origin, store.location) <= RECOMMEND_RADIUS_KM
+      (store) => !hasLocation(store) || distanceKm(origin, store.location) <= RECOMMEND_RADIUS_KM
     );
   }
 
   const isNew = (store) => daysSince(store.createdAt) <= NEW_STORE_DAYS;
   const newStores = candidates
     .filter(isNew)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.visits - b.visits);
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.visits - b.visits)
+    .map((store) => ({ ...store, reason: REASON_NEW }));
   const lowStores = candidates
     .filter((store) => !isNew(store) && store.visits <= LOW_VISITS)
-    .sort((a, b) => a.visits - b.visits);
+    .sort((a, b) => a.visits - b.visits)
+    .map((store) => ({ ...store, reason: REASON_LOW_VISITS }));
 
   return [...newStores, ...lowStores].slice(0, RECOMMEND_LIMIT).map(withOpenStatus);
 }
