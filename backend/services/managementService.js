@@ -287,7 +287,8 @@ function normalizedCoupon(body, current = {}) {
   const isActive = body?.isActive === undefined ? current.isActive ?? 1 : body.isActive;
   if (typeof title !== 'string' || !title || title.length > 120) throw new HttpError(400, 'Invalid coupon title');
   if (description != null && (typeof description !== 'string' || description.length > 500)) throw new HttpError(400, 'Invalid coupon description');
-  if (discountRate !== null && (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100)) {
+  // 금액 할인처럼 비율이 없는 쿠폰은 discountRate를 생략하거나 null로 보낸다
+  if (discountRate != null && (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 100)) {
     throw new HttpError(400, 'Invalid discountRate');
   }
   for (const date of [validFrom, validUntil]) {
@@ -297,7 +298,7 @@ function normalizedCoupon(body, current = {}) {
   }
   if (validFrom && validUntil && validFrom > validUntil) throw new HttpError(400, 'validFrom must not be after validUntil');
   if (![0, 1, false, true].includes(isActive)) throw new HttpError(400, 'Invalid isActive');
-  return { title, description: description || null, discountRate, validFrom: validFrom || null, validUntil: validUntil || null, isActive: Number(isActive) };
+  return { title, description: description || null, discountRate: discountRate ?? null, validFrom: validFrom || null, validUntil: validUntil || null, isActive: Number(isActive) };
 }
 
 function listCoupons(user, storeId) {
@@ -419,13 +420,14 @@ function updateUser(userId, body, actorId) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Request body must be a JSON object');
   const current = db.prepare('SELECT role, is_active FROM users WHERE user_id = ? AND deleted_at IS NULL').get(userId);
   if (!current) throw new HttpError(404, 'User not found');
-  if (userId === actorId && (body?.role && body.role !== 'admin' || body?.isActive === false || body?.isActive === 0)) {
+  if (body.isActive !== undefined && ![true, false, 0, 1].includes(body.isActive)) throw new HttpError(400, 'Invalid isActive');
+  const role = body.role ?? current.role;
+  const isActive = body.isActive === undefined ? current.is_active : Number(body.isActive);
+  if (!['customer', 'owner', 'admin'].includes(role)) throw new HttpError(400, 'Invalid role');
+  // 검증을 마친 최종 값으로 판단해야 null, '0' 같은 값으로 자기 계정을 정지시키는 우회를 막는다
+  if (userId === actorId && (role !== 'admin' || !isActive)) {
     throw new HttpError(400, 'You cannot remove your own admin access');
   }
-  const role = body?.role ?? current.role;
-  const isActive = body?.isActive === undefined ? current.is_active : Number(body.isActive);
-  if (!['customer', 'owner', 'admin'].includes(role)) throw new HttpError(400, 'Invalid role');
-  if (![0, 1].includes(isActive)) throw new HttpError(400, 'Invalid isActive');
   if (role === 'owner' && !db.prepare('SELECT 1 FROM business_registrations WHERE user_id = ? AND deleted_at IS NULL').get(userId)) {
     throw new HttpError(400, 'Owner role requires a business registration');
   }
@@ -478,7 +480,7 @@ function createCategory(body) {
       return db.prepare('SELECT category_id AS id, uuid, name FROM categories WHERE category_id = ? AND deleted_at IS NULL').get(categoryId);
     });
   } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new HttpError(409, 'Category already exists');
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.errcode === 2067) throw new HttpError(409, 'Category already exists');
     throw error;
   }
 }
@@ -495,7 +497,7 @@ function updateCategory(categoryId, body) {
       return db.prepare('SELECT category_id AS id, uuid, name FROM categories WHERE category_id = ? AND deleted_at IS NULL').get(categoryId);
     });
   } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new HttpError(409, 'Category already exists');
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.errcode === 2067) throw new HttpError(409, 'Category already exists');
     throw error;
   }
 }

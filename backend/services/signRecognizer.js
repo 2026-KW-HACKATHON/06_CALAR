@@ -1,16 +1,15 @@
 // 간판 사진 -> 글자 추출 (OCR)
 //
-// 임시 구현: tesseract.js(한국어+영어)로 사진 속 글자를 읽는다.
-// 실제 OCR은 자식 프로세스(ocrProcess.js)에서 돌리고, 여기서는 그 프로세스를 관리한다.
-// 나중에 image-proc(C/Rust) 쪽 인식기가 완성되면 extractText 함수 내용만 바꾸면 되고,
-// 라우트/매칭 로직(storeService.matchStoresByText)은 그대로 쓸 수 있다.
+// image-proc(Rust → WebAssembly)로 사진을 정리한 뒤 tesseract.js(한국어+영어)로 글자를 읽는다.
+// 전처리와 OCR은 자식 프로세스(ocrProcess.js)에서 돌리고, 여기서는 그 프로세스를 관리한다.
+// 한 장을 여러 방식으로 읽되(pass), 읽을 때마다 until(지금까지 글자)로 확인해 충분하면 멈춘다.
 const path = require('path');
 const { fork } = require('child_process');
 const HttpError = require('../utils/httpError');
 
 // 환경변수로 바꿀 수 있는 설정 (보통은 기본값 그대로 쓰면 된다)
 // - OCR_INIT_TIMEOUT_MS: OCR 프로세스 준비(언어 데이터 로딩) 시간 제한
-// - OCR_TIMEOUT_MS: 사진 1장 인식 시간 제한
+// - OCR_TIMEOUT_MS: 사진 1장 인식 시간 제한 (전처리 + 모든 pass 합계)
 // - OCR_LANG_PATH: 언어 데이터 위치(URL/폴더). 기본은 npm으로 설치된 @tesseract.js-data 패키지
 const INIT_TIMEOUT_MS = Number(process.env.OCR_INIT_TIMEOUT_MS) || 30 * 1000;
 const RECOGNIZE_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS) || 30 * 1000;
@@ -45,8 +44,8 @@ function spawnProcess() {
       const job = state.job;
       if (!job) return;
       state.job = null;
-      if (msg?.type === 'result') job.resolve(msg.text);
-      else job.reject(ocrError('OCR_IMAGE', msg?.message));
+      if (msg?.type === 'error') job.reject(ocrError('OCR_IMAGE', msg.message));
+      else job.resolve(msg);
     });
     proc.on('error', (err) => {
       console.error('[OCR] 프로세스 오류:', err);
@@ -78,8 +77,22 @@ function killProcess(state) {
   state.proc.kill('SIGKILL');
 }
 
+// OCR 프로세스에 메시지 하나를 보내고 답을 기다린다 (deadline까지 안 오면 504)
+function ask(state, message, deadline) {
+  const job = new Promise((resolve, reject) => {
+    state.job = { resolve, reject };
+    state.proc.send(message, (err) => {
+      if (err && state.job) {
+        state.job = null;
+        reject(ocrError('OCR_PROCESS', err.message));
+      }
+    });
+  });
+  return withTimeout(job, Math.max(deadline - Date.now(), 0), () => new HttpError(504, 'Sign recognition timed out'));
+}
+
 // 사진 1장 인식 (queue를 통해 한 번에 하나씩만 실행됨)
-async function recognizeOnce(imageBuffer) {
+async function recognizeOnce(imageBuffer, until) {
   const state = getProcess();
 
   try {
@@ -90,18 +103,16 @@ async function recognizeOnce(imageBuffer) {
     throw new HttpError(503, 'Sign recognition is temporarily unavailable');
   }
 
-  const job = new Promise((resolve, reject) => {
-    state.job = { resolve, reject };
-    state.proc.send({ type: 'recognize', image: imageBuffer }, (err) => {
-      if (err && state.job) {
-        state.job = null;
-        reject(ocrError('OCR_PROCESS', err.message));
-      }
-    });
-  });
-
+  const deadline = Date.now() + RECOGNIZE_TIMEOUT_MS;
   try {
-    return await withTimeout(job, RECOGNIZE_TIMEOUT_MS, () => new HttpError(504, 'Sign recognition timed out'));
+    const { passes } = await ask(state, { type: 'prepare', image: imageBuffer }, deadline);
+    let text = '';
+    for (let index = 0; index < passes; index += 1) {
+      const result = await ask(state, { type: 'pass', index }, deadline);
+      text = text ? `${text}\n${result.text}` : result.text;
+      if (until?.(text)) break;
+    }
+    return text;
   } catch (err) {
     if (err.code === 'OCR_IMAGE') {
       throw new HttpError(400, 'Invalid image file'); // 헤더는 정상인데 내용이 깨진 이미지 등
@@ -114,13 +125,14 @@ async function recognizeOnce(imageBuffer) {
 }
 
 // 이미지 Buffer를 받아 인식된 글자(string)를 돌려준다
-async function extractText(imageBuffer) {
+// until(text): 지금까지 읽은 글자로 충분하면 true → 남은 pass를 건너뛴다 (예: 가게가 매칭됨)
+async function extractText(imageBuffer, { until } = {}) {
   if (pendingJobs >= MAX_PENDING_JOBS) {
     throw new HttpError(503, 'Sign recognition is busy, please try again');
   }
 
   pendingJobs += 1;
-  const job = queue.then(() => recognizeOnce(imageBuffer));
+  const job = queue.then(() => recognizeOnce(imageBuffer, until));
   queue = job.catch(() => {}); // 앞 요청이 실패해도 다음 요청은 계속 처리
   try {
     return await job;

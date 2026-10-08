@@ -46,3 +46,30 @@ test('전화번호 인증 후 자동 로그인하여 주문하며 잘못된 코�
     assert.equal(auth.userFromToken(repeat.token), null);
   } finally { mock.mock.restore(); configMock.mock.restore(); await server.close(); }
 });
+
+test('같은 IP의 여러 고객이 문자 인증으로 로그인해도 막히지 않고, 틀린 코드 반복만 제한한다', async () => {
+  const codes = new Map();
+  const mock = test.mock.method(sms, 'sendCode', async (to, code) => { codes.set(to, code); return { mock: false }; });
+  const configMock = test.mock.method(sms, 'configuration', () => ({ mock: false }));
+  const server = await startServer();
+  try {
+    // 고객 8명이 한 와이파이에서 차례로 로그인 (예전에는 6번째부터 429)
+    for (let i = 0; i < 8; i += 1) {
+      const number = `0109000${String(i).padStart(4, '0')}`;
+      const sent = await server.request('POST', '/api/auth/phone/send-code', { json: { phone: number } });
+      assert.equal(sent.status, 200, `send ${i}`);
+      const code = codes.get(phone.normalizePhone(number));
+      const login = await server.request('POST', '/api/auth/phone/check-code', { json: { requestId: sent.body.requestId, code } });
+      assert.equal(login.status, 200, `check ${i}`);
+    }
+    // 틀린 코드는 IP당 20번까지만 (같은 프로세스의 앞 테스트에서 틀린 횟수도 함께 세어진다)
+    const statuses = [];
+    for (let i = 0; i < 22; i += 1) {
+      statuses.push((await server.request('POST', '/api/auth/phone/check-code', { json: { requestId: randomUUID(), code: '000000' } })).status);
+    }
+    const blockedAt = statuses.indexOf(429);
+    assert.ok(blockedAt > 0 && blockedAt <= 20, String(statuses));
+    assert.deepEqual([...new Set(statuses.slice(0, blockedAt))], [400]);
+    assert.deepEqual([...new Set(statuses.slice(blockedAt))], [429]);
+  } finally { mock.mock.restore(); configMock.mock.restore(); await server.close(); }
+});

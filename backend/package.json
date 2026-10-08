@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "admin:provision": "node scripts/provision-admin.js",
+    "evaluate:signs": "node scripts/evaluate-signs.js",
     "test": "node --test \"test/**/*.test.js\""
   },
   "keywords": [],

@@ -229,3 +229,63 @@ test('가입, 사업자 승인, 점주 및 관리자 CRUD, 고객 주문 권한'
   assert.ok(db.prepare('SELECT deleted_at FROM menus WHERE menu_id = ?').get(menuId).deleted_at);
   assert.ok(db.prepare('SELECT order_id FROM orders WHERE order_id = ?').get(orderId));
 });
+
+test('서버 시작 시 관리자 이메일로 먼저 가입된 일반 계정은 자동 승격하지 않는다', async () => {
+  const auth = require('../services/authService');
+  const email = 'squatter-admin@calar.local';
+  const user = auth.register({ email, password: 'attacker-password-2026', displayName: '선점 계정' });
+  const env = { email: process.env.CALAR_ADMIN_EMAIL, password: process.env.CALAR_ADMIN_PASSWORD };
+  const errors = test.mock.method(console, 'error', () => {});
+  try {
+    process.env.CALAR_ADMIN_EMAIL = email;
+    process.env.CALAR_ADMIN_PASSWORD = 'operator-password-2026';
+    auth.bootstrapAdmin();
+    assert.equal(auth.publicUser(user.id).role, 'customer');
+    assert.match(errors.mock.calls[0].arguments[0], /admin:provision/);
+    const login = await request('POST', '/api/auth/login', { email, password: 'attacker-password-2026' });
+    assert.equal(login.body.user.role, 'customer');
+
+    // 서버 콘솔 스크립트(npm run admin:provision)는 승격하면서 비밀번호를 운영자 값으로 바꾸고 세션을 끊는다
+    auth.provisionAdmin({ email, password: 'operator-password-2026' });
+    assert.equal(auth.publicUser(user.id).role, 'admin');
+    assert.equal((await request('GET', '/api/auth/me', undefined, login.body.token)).status, 401);
+    assert.equal((await request('POST', '/api/auth/login', { email, password: 'attacker-password-2026' })).status, 401);
+  } finally {
+    process.env.CALAR_ADMIN_EMAIL = env.email;
+    process.env.CALAR_ADMIN_PASSWORD = env.password;
+    errors.mock.restore();
+  }
+});
+
+test('관리 API 입력 검증: 업종 중복 409, 자기 계정 정지 우회 차단, 비율 없는 쿠폰과 사용 기간', async () => {
+  const [first] = (await request('GET', '/api/admin/categories', undefined, adminToken)).body;
+  assert.equal((await request('POST', '/api/admin/categories', { name: first.name }, adminToken)).status, 409);
+  const temp = await request('POST', '/api/admin/categories', { name: '중복 검사 업종' }, adminToken);
+  assert.equal((await request('PATCH', `/api/admin/categories/${temp.body.id}`, { name: first.name }, adminToken)).status, 409);
+
+  const me = (await request('GET', '/api/auth/me', undefined, adminToken)).body.user;
+  for (const isActive of [null, '0', '', [], 'false']) {
+    assert.equal((await request('PATCH', `/api/admin/users/${me.id}`, { isActive }, adminToken)).status, 400, JSON.stringify(isActive));
+  }
+  assert.equal((await request('PATCH', `/api/admin/users/${me.id}`, { isActive: false }, adminToken)).status, 400);
+  assert.equal((await request('GET', '/api/auth/me', undefined, adminToken)).status, 200);
+
+  // 4번 가게는 샘플 쿠폰이 없다. 기간이 지났거나 아직 시작 전인 쿠폰은 고객에게 보이지 않는다
+  const coupon = (body) => request('POST', '/api/admin/stores/4/coupons', body, adminToken);
+  assert.equal((await coupon({ title: '지난 쿠폰', discountRate: 10, validFrom: '2000-01-01', validUntil: '2000-12-31' })).status, 201);
+  assert.equal((await coupon({ title: '미래 쿠폰', discountRate: 10, validFrom: '2999-01-01' })).status, 201);
+  assert.equal((await request('GET', '/api/stores/4')).body.coupon, null);
+  const fixed = await coupon({ title: '반찬 1,000원 할인' }); // 금액 할인: discountRate 생략
+  assert.equal(fixed.status, 201);
+  assert.equal(fixed.body.discountRate, null);
+  assert.deepEqual((await request('GET', '/api/stores/4')).body.coupon, { uuid: fixed.body.uuid, title: '반찬 1,000원 할인', discountRate: null });
+});
+
+test('로그인 시 같은 날 만료된 세션도 정리한다', async () => {
+  const auth = require('../services/authService');
+  const user = auth.register({ email: 'session-cleanup@calar.local', password: 'session-cleanup-2026', displayName: '세션 정리' });
+  db.prepare("INSERT INTO user_sessions (uuid, user_id, token_hash, expires_at) VALUES ('expired-session', ?, 'expired-hash', ?)")
+    .run(user.id, new Date(Date.now() - 60 * 1000).toISOString());
+  assert.equal((await request('POST', '/api/auth/login', { email: user.email, password: 'session-cleanup-2026' })).status, 200);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM user_sessions WHERE uuid = 'expired-session'").get().count, 0);
+});

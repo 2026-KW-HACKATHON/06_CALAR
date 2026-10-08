@@ -15,6 +15,7 @@ build/
 # ---- Rust (image-proc) ----
 target/
 Cargo.lock
+!image-proc/Cargo.lock
 **/*.rs.bk
 
 # ---- C / C++ (image-proc) ----

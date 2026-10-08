@@ -70,7 +70,11 @@ router.post('/recognize', uploadImage, async (req, res) => {
   if (override !== undefined && typeof override !== 'string') {
     throw new HttpError(400, 'text must be a single string');
   }
-  const text = override?.trim() ? override : await signRecognizer.extractText(req.file.buffer);
+  const text = override?.trim()
+    ? override
+    : await signRecognizer.extractText(req.file.buffer, {
+      until: (partial) => storeService.matchStoresByText(partial).length > 0, // 가게가 나오면 더 읽지 않는다
+    });
 
   const stores = storeService.matchStoresByText(text);
   res.json({ matched: stores.length > 0, stores });

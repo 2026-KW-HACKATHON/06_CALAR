@@ -43,6 +43,16 @@ test('충전·선결제·환불은 중복 요청에 한 번만 반영되고 잔�
     assert.throws(() => orders.updateOrderStatus(first.body.id, { status: 'rejected' }), /cannot be changed/);
     assert.equal(credit.balance(user.id), 20000);
     assert.deepEqual(credit.wallet(user.id).transactions.map((item) => item.kind), ['refund', 'payment', 'topup']);
+    // 같은 메뉴를 나눠 보낸 주문도 재시도하면 (서버가 합쳐 저장했어도) 같은 주문으로 인정한다
+    const split = { ...orderBody, requestId: randomUUID(), items: [{ menuId: 101, quantity: 1 }, { menuId: 101, quantity: 1 }] };
+    const splitFirst = await server.request('POST', '/api/orders', { headers, json: split });
+    assert.equal(splitFirst.status, 201);
+    const splitRepeat = await server.request('POST', '/api/orders', { headers, json: split });
+    assert.equal(splitRepeat.status, 201);
+    assert.equal(splitRepeat.body.id, splitFirst.body.id);
+    assert.equal(credit.balance(user.id), 4000);
+    // 이미 쓴 requestId에 형식이 깨진 items → 500이 아니라 409
+    assert.equal((await server.request('POST', '/api/orders', { headers, json: { ...split, items: [null] } })).status, 409);
     process.env.NODE_ENV = 'production';
     assert.equal((await topup()).status, 403);
   } finally {

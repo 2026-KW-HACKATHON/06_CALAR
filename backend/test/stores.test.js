@@ -100,11 +100,29 @@ test('GET /api/stores/recommendations: 신규 → 저활성 순서', async () =>
   // 신규(30일 이내): 5, 4 (9/25, 방문 적은 순) → 3 (9/20) / 저활성: 2 / 1번은 오래되고 방문 많아 제외
   assert.deepEqual(ids(res.body), [5, 4, 3, 2]);
   assert.ok(res.body.every((s) => s.openStatus));
+  // 추천 이유: 신규 / 저활성
+  assert.deepEqual(res.body.map((s) => s.reason), ['새로 오픈했어요', '새로 오픈했어요', '새로 오픈했어요', '숨어있는 동네 가게예요']);
 
   assert.deepEqual(ids((await get('/api/stores/recommendations?lat=37.62&lng=127.06')).body), [5, 4, 3, 2]);
   assert.deepEqual((await get('/api/stores/recommendations?lat=35.1&lng=129.0')).body, []); // 부산: 반경 밖
   assert.equal((await get('/api/stores/recommendations?lat=37.6')).status, 400);
   assert.equal((await get('/api/stores/recommendations?lat=x&lng=y')).status, 400);
+});
+
+test('GET /api/stores/recommendations: 좌표 없는 신규 가게도 위치 기반 추천에 포함', async () => {
+  // 점주 화면에서 등록한 가게처럼 좌표 없이 등록된 신규 가게
+  const db = require('../db');
+  const { lastInsertRowid: id } = db
+    .prepare("INSERT INTO stores (name, open_hours, order_type, visits, created_at) VALUES ('좌표 없는 새 가게', '00:00-24:00', 'preorder', 0, '2026-09-30')")
+    .run();
+  try {
+    const nearby = (await get('/api/stores/recommendations?lat=37.62&lng=127.06')).body;
+    assert.deepEqual(ids(nearby), [Number(id), 5, 4, 3, 2]);
+    assert.equal(nearby[0].reason, '새로 오픈했어요');
+    assert.deepEqual(nearby[0].location, { lat: null, lng: null });
+  } finally {
+    db.prepare("UPDATE stores SET deleted_at = datetime('now') WHERE store_id = ?").run(id);
+  }
 });
 
 test('공통: 없는 주소, 깨진 URL, CORS', async () => {
